@@ -30,6 +30,15 @@ void Matrix::initialize(InitMethod method)
         for (auto &x : data_)
             x = dist(gen);
     }
+    else if (method == InitMethod::KAIMING)
+    {
+        // TODO: FIX THIS!
+        float stddev = sqrtf(2.0f / static_cast<float>(rows_));
+        std::mt19937 gen(std::random_device{}());
+        std::normal_distribution<float> dist(0.0f, 1.0f);
+        for (auto &x : data_)
+            x = dist(gen) * stddev;
+    }
 }
 
 void Matrix::set(int row, int col, float value)
@@ -397,4 +406,48 @@ Matrix Matrix::broadcast_divide(const Matrix &other, int axis) const
     }
 
     throw std::invalid_argument("Invalid axis or dimensions for broadcast_divide");
+}
+Matrix Matrix::argmax(int axis) const
+{
+    if (axis == 0)
+    {
+        Matrix result(1, cols_, Matrix::InitMethod::ZERO);
+        for (int j = 0; j < cols_; ++j)
+        {
+            int max_i = 0;
+            float max_val = -std::numeric_limits<float>::infinity();
+            for (int i = 0; i < rows_; ++i)
+            {
+                float val = get(i, j);
+                if (val > max_val)
+                {
+                    max_val = val;
+                    max_i = i;
+                }
+            }
+            result.set(0, j, static_cast<float>(max_i));
+        }
+        return result;
+    }
+    if (axis == 1)
+    {
+        Matrix result(rows_, 1, Matrix::InitMethod::ZERO);
+        for (int i = 0; i < rows_; ++i)
+        {
+            int max_j = 0;
+            float max_val = -std::numeric_limits<float>::infinity();
+            for (int j = 0; j < cols_; ++j)
+            {
+                float val = get(i, j);
+                if (val > max_val)
+                {
+                    max_val = val;
+                    max_j = j;
+                }
+            }
+            result.set(i, 0, static_cast<float>(max_j));
+        }
+        return result;
+    }
+    throw std::invalid_argument("Invalid axis for argmax: must be 0 or 1");
 }

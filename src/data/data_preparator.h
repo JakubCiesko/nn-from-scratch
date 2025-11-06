@@ -14,10 +14,13 @@
 class DataPreparator
 {
   public:
-    DataPreparator(const std::string &data_root_path, int random_seed = 42);
+    DataPreparator(const std::string &data_root_path, int random_seed = 42,
+                   int batch_size = 128);
     void load_data();
     void reset_epoch();
     void standardize_data();
+    [[nodiscard]] bool has_next_batch() const;
+    std::pair<Matrix, Matrix> get_batch();
     [[nodiscard]] const Matrix &get_X_train() const
     {
         return X_train;
@@ -50,6 +53,7 @@ class DataPreparator
     Matrix y_test;
     std::vector<int> train_indices_;
     size_t current_train_index;
+    int batch_size;
 };
 
 #endif // DATA_PREPARATOR_H

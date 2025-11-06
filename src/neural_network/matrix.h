@@ -13,7 +13,8 @@ class Matrix
     {
         ZERO,
         ONE,
-        NORMAL
+        NORMAL,
+        KAIMING
     };
     Matrix(int rows, int cols, InitMethod method = InitMethod::ZERO);
     void print() const;
@@ -44,6 +45,8 @@ class Matrix
     [[nodiscard]] Matrix elementwise_multiply(const Matrix &other) const;
     [[nodiscard]] Matrix broadcast_add(const Matrix &other, int axis) const;
     [[nodiscard]] Matrix broadcast_divide(const Matrix &other, int axis) const;
+    [[nodiscard]] Matrix
+    argmax(int axis) const; // will use for gettint predictions out of logits
 
   private:
     void initialize(InitMethod method);

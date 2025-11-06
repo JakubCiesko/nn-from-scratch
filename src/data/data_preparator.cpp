@@ -9,9 +9,11 @@
 #include <sstream>
 #include <stdexcept>
 
-DataPreparator::DataPreparator(const std::string &data_root_path, int random_seed)
-    : base_path(data_root_path), current_train_index(0), X_train(0, 0), X_test(0, 0),
-      y_train_one_hot(0, 0), y_train(0, 0), y_test(0, 0), y_test_one_hot(0, 0)
+DataPreparator::DataPreparator(const std::string &data_root_path, int random_seed,
+                               int batch_size)
+    : base_path(data_root_path), batch_size(batch_size), current_train_index(0),
+      X_train(0, 0), X_test(0, 0), y_train_one_hot(0, 0), y_train(0, 0), y_test(0, 0),
+      y_test_one_hot(0, 0)
 {
 
     if (random_seed == -1)
@@ -101,6 +103,7 @@ Matrix DataPreparator::load_labels(const std::string &filename, int num_rows,
 
 void DataPreparator::load_data()
 {
+    std::cout << "Loading data from path: " + base_path << std::endl;
     std::cout << "Loading train data vectors (60 000 vecs)" << std::endl;
     X_train = load_vectors(base_path + "fashion_mnist_train_vectors.csv", 60000,
                            28 * 28, false);
@@ -126,6 +129,38 @@ void DataPreparator::reset_epoch()
 {
     current_train_index = 0;
     std::shuffle(train_indices_.begin(), train_indices_.end(), rng);
+}
+
+std::pair<Matrix, Matrix> DataPreparator::get_batch()
+{
+    size_t from = current_train_index;
+    // set batch size or smaller when not enough data
+    size_t to = std::min(from + static_cast<size_t>(batch_size),
+                         static_cast<size_t>(X_train.rows()));
+    size_t actual_batch_size = to - from;
+    // what if we go out of bounds
+    Matrix X_batch(actual_batch_size, X_train.cols());
+    Matrix y_batch(actual_batch_size, y_train.cols());
+    for (size_t i = 0; i < actual_batch_size; ++i)
+    {
+        int shuffled_index = train_indices_[from + i];
+        for (int j = 0; j < X_train.cols(); ++j)
+        {
+            X_batch(i, j) = X_train.get(shuffled_index, j);
+        }
+
+        for (int j = 0; j < y_train.cols(); ++j)
+        {
+            y_batch(i, j) = y_train.get(shuffled_index, j);
+        }
+    }
+    current_train_index = to;
+    return {X_batch, y_batch};
+}
+
+bool DataPreparator::has_next_batch() const
+{
+    return current_train_index < static_cast<size_t>(X_train.rows());
 }
 
 void DataPreparator::standardize_data()
