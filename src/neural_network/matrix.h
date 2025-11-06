@@ -6,9 +6,15 @@
 #include <functional>
 #include <vector>
 
-class Matrix {
-public:
-    enum class InitMethod { ZERO, ONE, NORMAL };
+class Matrix
+{
+  public:
+    enum class InitMethod
+    {
+        ZERO,
+        ONE,
+        NORMAL
+    };
     Matrix(int rows, int cols, InitMethod method = InitMethod::ZERO);
     void print() const;
     [[nodiscard]] int rows() const;
@@ -21,7 +27,7 @@ public:
     Matrix operator-(float scalar) const;
     Matrix operator*(float scalar) const;
     // set get
-    float& operator()(int row, int col);
+    float &operator()(int row, int col);
     float operator()(int row, int col) const;
     void set(int row, int col, float value);
     [[nodiscard]] float get(int row, int col) const;
@@ -29,17 +35,18 @@ public:
     void transpose_inplace();
     [[nodiscard]] Matrix transpose() const;
     // matrix operation
-    Matrix apply(std::function<float(float)> function) const;
+    [[nodiscard]] Matrix apply(std::function<float(float)> function) const;
     void apply_inplace(std::function<float(float)> function);
     [[nodiscard]] Matrix sum_over(int axis) const;
     [[nodiscard]] Matrix mean_over(int axis) const;
     [[nodiscard]] Matrix std_over(int axis) const;
+    [[nodiscard]] Matrix elementwise_multiply(const Matrix &other) const;
+    [[nodiscard]] Matrix broadcast_add(const Matrix &other, int axis) const;
 
-private:
+  private:
     void initialize(InitMethod method);
     int rows_;
     int cols_;
     std::vector<float> data_;
-
 };
 #endif
