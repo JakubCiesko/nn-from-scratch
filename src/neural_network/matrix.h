@@ -32,7 +32,8 @@ public:
     Matrix apply(std::function<float(float)> function) const;
     void apply_inplace(std::function<float(float)> function);
     [[nodiscard]] Matrix sum_over(int axis) const;
-
+    [[nodiscard]] Matrix mean_over(int axis) const;
+    [[nodiscard]] Matrix std_over(int axis) const;
 
 private:
     void initialize(InitMethod method);

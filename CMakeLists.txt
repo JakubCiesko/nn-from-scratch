@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 20)
 
 add_executable(project_repo
         main.cpp
-        src/matrix.cpp
-        src/tensor.cpp
+        src/neural_network/matrix.cpp
+        src/neural_network/tensor.cpp
+        src/data/data_preparator.h
+        src/data/data_preparator.cpp
 )

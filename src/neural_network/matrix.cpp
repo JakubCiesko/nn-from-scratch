@@ -193,3 +193,42 @@ Matrix Matrix::sum_over(int axis) const {
     }
     throw std::invalid_argument("Invalid axis");
 }
+
+Matrix Matrix::mean_over(int axis) const {
+    if (axis == 0) {
+        return sum_over(axis) * (1/static_cast<float>(rows_));
+    };
+    if (axis == 1) {
+        return sum_over(axis) * (1/static_cast<float>(cols_));
+    };
+    throw std::invalid_argument("Invalid axis");
+}
+
+Matrix Matrix::std_over(int axis) const {
+    Matrix mean = mean_over(axis);
+    if (axis == 0) {
+        // sum over rows, matrix is 1 * columns
+        Matrix std(1, cols_, InitMethod::ZERO);
+        for (int j = 0; j < cols_; ++j) {
+            float sum = 0.0f;
+            for (int i = 0; i < rows_; ++i) {
+                sum += powf((data_[i * cols_ + j] - mean(0, j)), 2.0f);
+            }
+            std.data_[j] = sqrtf(sum / static_cast<float>(rows_));
+        }
+        return std;
+    }
+    if (axis == 1) {
+        // Sum over columns: result is rows_ × 1
+        Matrix result(rows_, 1, InitMethod::ZERO);
+        for (int i = 0; i < rows_; ++i) {
+            float sum = 0.0f;
+            for (int j = 0; j < cols_; ++j) {
+                sum += powf((data_[i * cols_ + j] - mean(j, 0)), 2.0f);
+            }
+            result.data_[i] =  sqrtf(sum / static_cast<float>(cols_));
+        }
+        return result;
+    }
+    throw std::invalid_argument("Invalid axis");
+}
