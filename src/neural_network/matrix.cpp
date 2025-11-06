@@ -334,3 +334,67 @@ Matrix Matrix::broadcast_add(const Matrix &other, int axis) const
     }
     throw std::invalid_argument("Invalid axis or dimensions");
 }
+
+Matrix Matrix::max_over(int axis) const
+{
+    if (axis == 0)
+    {
+        Matrix result(1, cols_, InitMethod::ZERO);
+        for (int j = 0; j < cols_; ++j)
+        {
+            float max_val = -std::numeric_limits<float>::infinity();
+            for (int i = 0; i < rows_; ++i)
+            {
+                max_val = std::max(max_val, data_[i * cols_ + j]);
+            }
+            result.data_[j] = max_val;
+        }
+        return result;
+    }
+    if (axis == 1)
+    {
+        Matrix result(rows_, 1, InitMethod::ZERO);
+        for (int i = 0; i < rows_; ++i)
+        {
+            float max_val = -std::numeric_limits<float>::infinity();
+            for (int j = 0; j < cols_; ++j)
+            {
+                max_val = std::max(max_val, data_[i * cols_ + j]);
+            }
+            result.data_[i] = max_val;
+        }
+        return result;
+    }
+    throw std::invalid_argument("Invalid axis");
+}
+
+Matrix Matrix::broadcast_divide(const Matrix &other, int axis) const
+{
+    if (axis == 0 && other.cols() == cols() && other.rows() == 1)
+    {
+        Matrix result(rows_, cols_);
+        for (int i = 0; i < rows_; ++i)
+        {
+            for (int j = 0; j < cols_; ++j)
+            {
+                result.data_[i * cols_ + j] = data_[i * cols_ + j] / other.data_[j];
+            }
+        }
+        return result;
+    }
+    if (axis == 1 && other.rows() == rows() && other.cols() == 1)
+    {
+        Matrix result(rows_, cols_);
+        for (int i = 0; i < rows_; ++i)
+        {
+            for (int j = 0; j < cols_; ++j)
+            {
+                // result(i, j) = data(i, j) / other(i, 0)
+                result.data_[i * cols_ + j] = data_[i * cols_ + j] / other.data_[i];
+            }
+        }
+        return result;
+    }
+
+    throw std::invalid_argument("Invalid axis or dimensions for broadcast_divide");
+}

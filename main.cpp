@@ -1,75 +1,66 @@
 #include "src/neural_network/matrix.h"
 #include "src/neural_network/tensor.h"
+#include <iomanip> // For std::setprecision
 #include <iostream>
 
 int main()
 {
-    std::cout << "--- Tensor Class Autograd Test ---" << std::endl;
+    std::cout << "--- Cross-Entropy Loss Autograd Test ---" << std::endl;
+    std::cout << std::fixed << std::setprecision(5); // Format output
 
-    // 1. Create Tensors for a single layer: y = relu(x*w + b)
-    // We'll simulate a batch of 2 samples (x), with 3 features each.
-    // The layer will have 2 neurons.
+    // 1. Create Logits (Network Output)
+    // We'll simulate a batch of 2, with 4 classes.
+    Matrix logits_val(2, 4, Matrix::InitMethod::ZERO);
+    // Deterministic values for logits
+    logits_val.set(0, 0, 0.1f);
+    logits_val.set(0, 1, 0.5f);
+    logits_val.set(0, 2, 0.1f);
+    logits_val.set(0, 3, 0.3f);
+    logits_val.set(1, 0, 0.1f);
+    logits_val.set(1, 1, -0.2f);
+    logits_val.set(1, 2, -0.5f);
+    logits_val.set(1, 3, 1.0f);
 
-    // x (input): 2x3 matrix (batch=2, features=3)
-    Matrix x_val(2, 3, Matrix::InitMethod::NORMAL);
-    Tensor x(x_val, true); // requires_grad = true
+    Tensor logits(logits_val, true); // Logits MUST require grad
 
-    // w (weights): 3x2 matrix (features=3, neurons=2)
-    Matrix w_val(3, 2, Matrix::InitMethod::NORMAL);
-    Tensor w(w_val, true); // requires_grad = true
+    // 2. Create True Labels
+    // Your loss function expects raw labels (B, 1),
+    // just like your DataPreparator provides.
+    Matrix labels_val(2, 1, Matrix::InitMethod::ZERO);
+    labels_val.set(0, 0, 1); // Row 0, correct class is 1
+    labels_val.set(1, 0, 3); // Row 1, correct class is 3
 
-    // b (bias): 1x2 matrix (1, neurons=2)
-    Matrix b_val(1, 2, Matrix::InitMethod::ONE); // Start bias at 1.0
-    Tensor b(b_val, true);                       // requires_grad = true
+    Tensor y_true(labels_val, false); // Labels do not require grad
 
-    // 2. --- Forward Pass ---
+    // --- 3. Forward Pass ---
     std::cout << "\n--- Forward Pass ---" << std::endl;
+    // Calculate the loss
+    Tensor loss = logits.cross_entropy_loss(y_true);
 
-    // z = x * w (MatMul)
-    Tensor z = x * w; // z should be (2, 2)
+    std::cout << "Logits (Input):" << std::endl;
+    logits.value.print();
+    std::cout << "True Labels:" << std::endl;
+    y_true.value.print();
+    std::cout << "Calculated Loss:" << std::endl;
+    loss.value.print();
 
-    // a = z + b (Broadcast Add)
-    Tensor a = z.broadcast_add(b, 0); // a should be (2, 2)
-
-    // y = relu(a) (Activation)
-    Tensor y = a.relu(); // y should be (2, 2)
-
-    std::cout << "Input X (2x3):" << std::endl;
-    x.value.print();
-    std::cout << "Weights W (3x2):" << std::endl;
-    w.value.print();
-    std::cout << "Bias B (1x2):" << std::endl;
-    b.value.print();
-    std::cout << "Output Y (2x2):" << std::endl;
-    y.value.print();
-
-    // 3. --- Backward Pass ---
+    // --- 4. Backward Pass ---
     std::cout << "\n--- Backward Pass ---" << std::endl;
+    // This will set loss.grad = 1.0 and start the chain
+    loss.backward();
 
-    // To start backpropagation, we need an initial gradient.
-    // In a real network, this comes from the loss function.
-    // Here, we'll set the "incoming" gradient for 'y' to all 1s.
-    y.grad = Matrix(2, 2, Matrix::InitMethod::ONE);
+    std::cout << "Gradient of Loss (should be 1.0):" << std::endl;
+    loss.grad.print();
 
-    // Call backward() on the *last* tensor in the chain.
-    // This will trigger the chain reaction.
-    y.backward();
+    std::cout << "\nGradient of Logits (dLoss/dLogits):" << std::endl;
+    logits.grad.print();
 
-    std::cout << "Gradient of Y (should be all 1s):" << std::endl;
-    y.grad.print();
-
-    std::cout << "\n--- Calculated Gradients ---" << std::endl;
-
-    std::cout << "Gradient of Weights (W):" << std::endl;
-    w.grad.print();
-
-    std::cout << "Gradient of Input (X):" << std::endl;
-    x.grad.print();
-
-    std::cout << "Gradient of Bias (B):" << std::endl;
-    b.grad.print();
-
-    std::cout << "\n--- Test Complete ---" << std::endl;
+    // --- 5. Verify Results ---
+    std::cout << "\n--- Expected Results ---" << std::endl;
+    std::cout << "Expected Loss: 0.90426" << std::endl;
+    std::cout << "Expected Logits Gradient:" << std::endl;
+    std::cout << " 0.10603 -0.34177  0.10603  0.12971" << std::endl;
+    std::cout << " 0.10543  0.07788  0.05786 -0.24117" << std::endl;
 
     return 0;
 }

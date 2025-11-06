@@ -25,8 +25,7 @@ class Tensor
     [[nodiscard]] Tensor elementwise_multiply(Tensor &);
     [[nodiscard]] Tensor operator*(Tensor &);
     [[nodiscard]] Tensor relu();
-    [[nodiscard]] Tensor softmax() const;
-    [[nodiscard]] Tensor cross_entropy_loss() const;
+    [[nodiscard]] Tensor cross_entropy_loss(const Tensor &y_true);
     [[nodiscard]] Tensor broadcast_add(Tensor &, int);
 
   private:

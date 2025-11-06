@@ -40,8 +40,10 @@ class Matrix
     [[nodiscard]] Matrix sum_over(int axis) const;
     [[nodiscard]] Matrix mean_over(int axis) const;
     [[nodiscard]] Matrix std_over(int axis) const;
+    [[nodiscard]] Matrix max_over(int axis) const;
     [[nodiscard]] Matrix elementwise_multiply(const Matrix &other) const;
     [[nodiscard]] Matrix broadcast_add(const Matrix &other, int axis) const;
+    [[nodiscard]] Matrix broadcast_divide(const Matrix &other, int axis) const;
 
   private:
     void initialize(InitMethod method);

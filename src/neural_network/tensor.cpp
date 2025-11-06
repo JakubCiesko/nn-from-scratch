@@ -4,6 +4,7 @@
 #include "tensor.h"
 #include <cmath>
 #include <stdexcept>
+#include <utility>
 
 Tensor::Tensor(const Matrix &value, bool requires_grad)
     : value(value), grad(value.rows(), value.cols(), Matrix::InitMethod::ZERO),
@@ -35,8 +36,6 @@ Tensor Tensor::operator+(Tensor &other)
     Tensor result(result_value, result_requires_grad);
     if (result_requires_grad)
     {
-        auto self = *this;
-        auto other_copy = other;
         result.backward_fn = [this, &other, &result]() mutable
         {
             if (this->requires_grad)
@@ -61,8 +60,7 @@ Tensor Tensor::operator-(Tensor &other)
     Tensor result(result_value, result_requires_grad);
     if (result_requires_grad)
     {
-        auto self = *this;
-        auto other_copy = other;
+
         result.backward_fn = [this, &other, &result]() mutable
         {
             if (this->requires_grad)
@@ -91,8 +89,7 @@ Tensor Tensor::elementwise_multiply(Tensor &other)
     Tensor result(result_value, result_requires_grad);
     if (result_requires_grad)
     {
-        auto self = *this;
-        auto other_copy = other;
+
         result.backward_fn = [this, &other, &result]() mutable
         {
             if (this->requires_grad)
@@ -127,8 +124,7 @@ Tensor Tensor::operator*(Tensor &other)
 
     if (result_requires_grad)
     {
-        auto self = *this;
-        auto other_copy = other;
+
         result.backward_fn = [this, &other, &result]() mutable
         {
             // C = AB -> grad(A) = grad(C)trans(B), grad(B) = trans(A) grad(C)
@@ -156,8 +152,7 @@ Tensor Tensor::broadcast_add(Tensor &other, int axis)
 
     if (result_requires_grad)
     {
-        auto self = *this;
-        auto other_copy = other;
+
         result.backward_fn = [this, &other, &result, axis]() mutable
         {
             if (this->requires_grad)
@@ -184,7 +179,7 @@ Tensor Tensor::relu()
     Tensor result(result_value, requires_grad);
     if (result.requires_grad)
     {
-        auto self = *this;
+
         result.backward_fn = [this, &result]() mutable
         {
             if (this->requires_grad)
@@ -196,5 +191,77 @@ Tensor Tensor::relu()
             };
         };
     }
+    return result;
+}
+
+Tensor Tensor::cross_entropy_loss(const Tensor &y_true)
+{
+    const Matrix &logits = this->value;
+    const Matrix &labels = y_true.value; // These are raw labels (B, 1)
+    int batch_size = logits.rows();
+    int num_classes = logits.cols();
+
+    // --- 1. FORWARD PASS ---
+
+    // --- LogSoftmax (Stable) ---
+    Matrix max_logits = logits.max_over(1);                           // (B, 1)
+    Matrix safe_logits = logits.broadcast_add(max_logits * -1.0f, 1); // (B, C)
+
+    Matrix exps = safe_logits.apply(exp); // (B, C)
+    Matrix sum_exps = exps.sum_over(1);   // (B, 1)
+
+    Matrix log_sum_exps = sum_exps.apply(log);                               // (B, 1)
+    Matrix log_softmax = safe_logits.broadcast_add(log_sum_exps * -1.0f, 1); // (B, C)
+
+    // --- NLL Loss (for raw labels) ---
+    // We need to pick the log_softmax value at the correct class index
+    // for each item in the batch.
+    float total_loss = 0.0f;
+    for (int i = 0; i < batch_size; ++i)
+    {
+        int correct_class = static_cast<int>(labels.get(i, 0));
+        total_loss += log_softmax.get(i, correct_class);
+    }
+    float mean_loss = -total_loss / static_cast<float>(batch_size);
+
+    // Create result tensor
+    Matrix result_value(1, 1, Matrix::InitMethod::ZERO);
+    result_value.set(0, 0, mean_loss);
+    Tensor result(result_value, true);
+
+    // --- 2. BACKWARD PASS (Setup) ---
+
+    // We need the full softmax probabilities for the gradient: (probs - y_true_one_hot)
+    Matrix softmax_probs = exps.broadcast_divide(sum_exps, 1); // (B, C)
+
+    // Cache the probabilities and the raw labels
+    auto softmax_probs_cache = std::move(softmax_probs);
+    auto y_true_labels_cache = y_true.value;
+
+    auto &logits_tensor = *this; // keep reference before creating result
+
+    result.backward_fn = [&logits_tensor, y_true_labels_cache, softmax_probs_cache,
+                          num_classes]() mutable
+    {
+        if (logits_tensor.requires_grad)
+        {
+            int batch_size = logits_tensor.value.rows();
+
+            Matrix y_true_one_hot(batch_size, num_classes, Matrix::InitMethod::ZERO);
+            for (int i = 0; i < batch_size; ++i)
+            {
+                int correct_class = static_cast<int>(y_true_labels_cache.get(i, 0));
+                y_true_one_hot.set(i, correct_class, 1.0f);
+            }
+
+            Matrix grad_logits = softmax_probs_cache - y_true_one_hot;
+            Matrix mean_grad_logits =
+                grad_logits * (1.0f / static_cast<float>(batch_size));
+
+            logits_tensor.grad = logits_tensor.grad + mean_grad_logits;
+            logits_tensor.backward();
+        }
+    };
+
     return result;
 }
