@@ -145,6 +145,7 @@ Matrix Matrix::operator*(const Matrix &other) const
         throw std::invalid_argument("Matrix sizes must match for multiplication");
     Matrix result(rows_, other.cols_, InitMethod::ZERO);
     // Cij = dot(Ai*, B*,j) = sum(AiK*bKj)
+#pragma omp parallel for collapse(2)
     for (int i = 0; i < rows_; ++i)
     {
         for (int j = 0; j < other.cols_; ++j)

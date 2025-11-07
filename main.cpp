@@ -1,3 +1,5 @@
+#include <chrono>
+
 #include "src/data/data_preparator.h"
 #include "src/neural_network/matrix.h"
 #include "src/neural_network/optimizer.h"
@@ -9,10 +11,23 @@
 #include <memory> // For std::shared_ptr
 #include <vector>
 
+std::string current_time()
+{
+    using namespace std::chrono;
+    auto now = system_clock::now();
+    std::time_t now_c = system_clock::to_time_t(now);
+    std::tm *parts = std::localtime(&now_c);
+
+    std::ostringstream oss;
+    oss << std::put_time(parts, "%H:%M:%S"); // Format as HH:MM:SS
+    return oss.str();
+}
+
 void xor_problem()
 {
-    std::cout << "--- XOR Training Test (Manual Tensors) ---" << std::endl;
-    std::cout << std::fixed << std::setprecision(5);
+    std::cout << "[" << current_time() << "] "
+              << "--- XOR Training Test (Manual Tensors) ---" << std::endl;
+    std::cout << "[" << current_time() << "] " << std::fixed << std::setprecision(5);
 
     // 1. Create XOR Data
     Matrix X_val(4, 2); // 4 samples, 2 features
@@ -91,17 +106,19 @@ void xor_problem()
 
         if (e % 100 == 0 || e == epochs - 1)
         {
-            std::cout << "Epoch " << std::setw(4) << e << " Loss: ";
+            std::cout << "[" << current_time() << "] " << "Epoch " << std::setw(4) << e
+                      << " Loss: ";
             loss.value.print();
         }
     }
 
     // 5. Show final predictions
-    std::cout << "\n--- Final Predictions ---" << std::endl;
-    std::cout << "Inputs (X):" << std::endl;
+    std::cout << "[" << current_time() << "] " << "\n--- Final Predictions ---"
+              << std::endl;
+    std::cout << "[" << current_time() << "] " << "Inputs (X):" << std::endl;
     X.value.print();
 
-    std::cout << "True Labels (y):" << std::endl;
+    std::cout << "[" << current_time() << "] " << "True Labels (y):" << std::endl;
     y.value.print();
 
     // Run forward pass one last time
@@ -109,7 +126,8 @@ void xor_problem()
     Tensor a1 = z1.relu();
     Tensor final_logits = (a1 * (*W2)).broadcast_add(*b2, 0);
 
-    std::cout << "Final Logits (raw network output):" << std::endl;
+    std::cout << "[" << current_time() << "] "
+              << "Final Logits (raw network output):" << std::endl;
     final_logits.value.print();
 
     std::cout << "\n--- Interpretation ---" << std::endl;
@@ -124,9 +142,10 @@ float compute_accuracy(const Matrix &logits, const Matrix &y_true);
 
 int main()
 {
+    auto start_time = std::chrono::steady_clock::now();
     int batch_size = 64;
     int seed = 42;
-    DataPreparator data_preparator("../data/", seed, batch_size);
+    DataPreparator data_preparator("./data/", seed, batch_size);
     data_preparator.load_data();
     data_preparator.standardize_data();
 
@@ -134,7 +153,7 @@ int main()
     Matrix y_train = data_preparator.get_y_train();
 
     // model definition
-    int hidden_dim = 16;
+    int hidden_dim = 64;
     Matrix W1_val = (Matrix(28 * 28, hidden_dim, Matrix::InitMethod::KAIMING));
     Matrix b1_val(1, hidden_dim, Matrix::InitMethod::ZERO);
     auto W1 = std::make_shared<Tensor>(W1_val, true);
@@ -151,12 +170,13 @@ int main()
     auto b3 = std::make_shared<Tensor>(b3_val, true);
 
     std::vector model_params{W1, b1, W2, b2, W3, b3};
-    Optimizer optimizer(model_params, 0.001f);
+    Optimizer optimizer(model_params, 0.01f);
     Matrix loss_val(1, 1);
 
     int epochs = 5;
 
-    std::cout << "Starting training for " + std::to_string(epochs) + " epochs"
+    std::cout << "[" << current_time() << "] "
+              << "Starting training for " + std::to_string(epochs) + " epochs"
               << std::endl;
 
     for (int e = 0; e < epochs; ++e)
@@ -168,7 +188,8 @@ int main()
         while (data_preparator.has_next_batch())
         {
             if (++batch_i % 100 == 0)
-                std::cout << "[Epoch " + std::to_string(e + 1) +
+                std::cout << "[" << current_time() << "] "
+                          << "[Epoch " + std::to_string(e + 1) +
                                  "] Batch number: " + std::to_string(batch_i) +
                                  " Loss: " + std::to_string(loss_val.get(0, 0))
                           << std::endl;
@@ -198,11 +219,12 @@ int main()
 
         if (e % 1 == 0 || e == epochs - 1)
         {
-            std::cout << "[Epoch" << std::setw(2) << e + 1 << "] Loss: ";
+            std::cout << "[" << current_time() << "] " << "[Epoch" << std::setw(2)
+                      << e + 1 << "] Loss: ";
             loss_val.print();
         }
     }
-    std::cout << "Testing" << std::endl;
+    std::cout << "[" << current_time() << "] " << "Testing" << std::endl;
     Matrix X_test(data_preparator.get_X_test());
     // wild thing:
     Matrix z1 = (X_test * W1->value).broadcast_add(b1->value, 0);
@@ -211,7 +233,11 @@ int main()
     Matrix a2 = z2.apply([](float val) { return std::max(0.0f, val); });
     Matrix logits = (a2 * W3->value).broadcast_add(b3->value, 0);
     float acc = compute_accuracy(logits, data_preparator.get_y_test());
-    std::cout << "TEST_ACC: " << acc << std::endl;
+    std::cout << "[" << current_time() << "] " << "TEST_ACC: " << acc << std::endl;
+    auto end_time = std::chrono::steady_clock::now();
+    auto duration =
+        std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
+    std::cout << "Total code run time: " << duration.count() << " seconds" << std::endl;
     return 0;
 }
 
