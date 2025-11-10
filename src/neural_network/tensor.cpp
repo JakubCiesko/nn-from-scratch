@@ -197,25 +197,19 @@ Tensor Tensor::relu()
 Tensor Tensor::cross_entropy_loss(const Tensor &y_true)
 {
     const Matrix &logits = this->value;
-    const Matrix &labels = y_true.value; // These are raw labels (B, 1)
+    const Matrix &labels = y_true.value;
     int batch_size = logits.rows();
     int num_classes = logits.cols();
 
-    // --- 1. FORWARD PASS ---
+    Matrix max_logits = logits.max_over(1);
+    Matrix safe_logits = logits.broadcast_add(max_logits * -1.0f, 1);
 
-    // --- LogSoftmax (Stable) ---
-    Matrix max_logits = logits.max_over(1);                           // (B, 1)
-    Matrix safe_logits = logits.broadcast_add(max_logits * -1.0f, 1); // (B, C)
+    Matrix exps = safe_logits.apply(exp);
+    Matrix sum_exps = exps.sum_over(1);
 
-    Matrix exps = safe_logits.apply(exp); // (B, C)
-    Matrix sum_exps = exps.sum_over(1);   // (B, 1)
+    Matrix log_sum_exps = sum_exps.apply(log);
+    Matrix log_softmax = safe_logits.broadcast_add(log_sum_exps * -1.0f, 1);
 
-    Matrix log_sum_exps = sum_exps.apply(log);                               // (B, 1)
-    Matrix log_softmax = safe_logits.broadcast_add(log_sum_exps * -1.0f, 1); // (B, C)
-
-    // --- NLL Loss (for raw labels) ---
-    // We need to pick the log_softmax value at the correct class index
-    // for each item in the batch.
     float total_loss = 0.0f;
     for (int i = 0; i < batch_size; ++i)
     {
@@ -224,21 +218,16 @@ Tensor Tensor::cross_entropy_loss(const Tensor &y_true)
     }
     float mean_loss = -total_loss / static_cast<float>(batch_size);
 
-    // Create result tensor
     Matrix result_value(1, 1, Matrix::InitMethod::ZERO);
     result_value.set(0, 0, mean_loss);
     Tensor result(result_value, true);
 
-    // --- 2. BACKWARD PASS (Setup) ---
+    Matrix softmax_probs = exps.broadcast_divide(sum_exps, 1);
 
-    // We need the full softmax probabilities for the gradient: (probs - y_true_one_hot)
-    Matrix softmax_probs = exps.broadcast_divide(sum_exps, 1); // (B, C)
-
-    // Cache the probabilities and the raw labels
     auto softmax_probs_cache = std::move(softmax_probs);
     auto y_true_labels_cache = y_true.value;
 
-    auto &logits_tensor = *this; // keep reference before creating result
+    auto &logits_tensor = *this;
 
     result.backward_fn = [&logits_tensor, y_true_labels_cache, softmax_probs_cache,
                           num_classes]() mutable
@@ -263,5 +252,31 @@ Tensor Tensor::cross_entropy_loss(const Tensor &y_true)
         }
     };
 
+    return result;
+}
+
+Tensor Tensor::matmul_broadcast_add(Tensor &B, Tensor &C) {
+    Matrix result_value = value.matmul_broadcast_add(B.value, C.value);
+    Tensor result(result_value, requires_grad || B.requires_grad || C.requires_grad);
+    if (result.requires_grad) {
+        result.backward_fn = [this, &B, &C, &result]() mutable
+        {
+
+            if (this->requires_grad)
+            {
+                this->grad = this->grad + result.grad * B.value.transpose();
+                this->backward();
+            }
+            if (B.requires_grad)
+            {
+                B.grad = B.grad + this->value.transpose() * result.grad;
+                B.backward();
+            }
+            if (C.requires_grad) {
+                C.grad = C.grad + result.grad.sum_over(0);
+                C.backward();
+            }
+        };
+    }
     return result;
 }

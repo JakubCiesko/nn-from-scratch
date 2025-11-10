@@ -27,9 +27,8 @@ class Tensor
     [[nodiscard]] Tensor relu();
     [[nodiscard]] Tensor cross_entropy_loss(const Tensor &y_true);
     [[nodiscard]] Tensor broadcast_add(Tensor &, int);
+    [[nodiscard]] Tensor matmul_broadcast_add( Tensor &B, Tensor &C);
 
-  private:
-    // nothing yet?
 };
 
 #endif // TENSOR_H

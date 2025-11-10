@@ -30,7 +30,7 @@ int main()
     auto start_time = std::chrono::steady_clock::now();
     int batch_size = 64;
     int seed = 42;
-    DataPreparator data_preparator("./data/", seed, batch_size);
+    DataPreparator data_preparator("../data/", seed, batch_size);
     data_preparator.load_data();
     data_preparator.standardize_data();
 
@@ -58,7 +58,7 @@ int main()
     Optimizer optimizer(model_params, 0.01f);
     Matrix loss_val(1, 1);
 
-    int epochs = 5;
+    int epochs = 10;
 
     std::cout << "[" << current_time() << "] "
               << "Starting training for " + std::to_string(epochs) + " epochs"
@@ -84,22 +84,22 @@ int main()
             Tensor y_batch(y_batch_mat, false);
 
             // forward pass
-            Tensor linear1 = X_batch * (*W1);
-            Tensor linear1_bias = linear1.broadcast_add(*b1, 0);
-            Tensor y1 = linear1_bias.relu();
+            // forward pass (fused matmul + bias)
+            Tensor y1_linear = X_batch.matmul_broadcast_add(*W1, *b1);
+            Tensor y1 = y1_linear.relu();
 
-            Tensor linear2 = y1 * (*W2);
-            Tensor linear2_bias = linear2.broadcast_add(*b2, 0);
-            Tensor y2 = linear2_bias.relu();
+            Tensor y2_linear = y1.matmul_broadcast_add(*W2, *b2);
+            Tensor y2 = y2_linear.relu();
 
-            Tensor linear3 = y2 * (*W3);
-            Tensor logits = linear3.broadcast_add(*b3, 0); // this is logits
+            Tensor logits = y2.matmul_broadcast_add(*W3, *b3); // fused final layer
 
             Tensor loss = logits.cross_entropy_loss(y_batch);
             loss_val = loss.value;
+
             // backprop
             loss.backward();
             optimizer.step();
+
         }
 
         if (e % 1 == 0 || e == epochs - 1)
@@ -112,12 +112,15 @@ int main()
     std::cout << "[" << current_time() << "] " << "Testing" << std::endl;
     Matrix X_test(data_preparator.get_X_test());
     // wild thing:
-    Matrix z1 = (X_test * W1->value).broadcast_add(b1->value, 0);
+    Matrix z1 = X_test.matmul_broadcast_add(W1->value, b1->value);
     Matrix a1 = z1.apply([](float val) { return std::max(0.0f, val); });
-    Matrix z2 = (a1 * W2->value).broadcast_add(b2->value, 0);
+
+    Matrix z2 = a1.matmul_broadcast_add(W2->value, b2->value);
     Matrix a2 = z2.apply([](float val) { return std::max(0.0f, val); });
-    Matrix logits = (a2 * W3->value).broadcast_add(b3->value, 0);
+
+    Matrix logits = a2.matmul_broadcast_add(W3->value, b3->value);
     float acc = compute_accuracy(logits, data_preparator.get_y_test());
+
     std::cout << "[" << current_time() << "] " << "TEST_ACC: " << acc << std::endl;
     auto end_time = std::chrono::steady_clock::now();
     auto duration =
