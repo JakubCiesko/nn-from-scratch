@@ -144,7 +144,7 @@ Matrix Matrix::operator*(const Matrix &other) const
     if (cols_ != other.rows_)
         throw std::invalid_argument("Matrix sizes must match for multiplication");
     Matrix result(rows_, other.cols_, InitMethod::ZERO);
-    // Cij = dot(Ai*, B*,j) = sum(AiK*bKj)
+// Cij = dot(Ai*, B*,j) = sum(AiK*bKj)
 #pragma omp parallel for collapse(2)
     for (int i = 0; i < rows_; ++i)
     {
@@ -451,4 +451,26 @@ Matrix Matrix::argmax(int axis) const
         return result;
     }
     throw std::invalid_argument("Invalid axis for argmax: must be 0 or 1");
+}
+
+Matrix Matrix::matmul_broadcast_add(const Matrix &B, const Matrix &C) const
+{
+    // A=Batch*m B=m*r C = Batch*1 -> result = batch*r
+    if (cols_ != B.rows() || (rows_ != C.rows()))
+        throw std::invalid_argument("Invalid matrix dimensions");
+    Matrix result(rows_, B.cols());
+#pragma omp parallel for collapse(2)
+    for (int i = 0; i < rows_; ++i)
+    {
+        for (int j = 0; j < B.cols_; ++j)
+        {
+            loat sum = 0.0f;
+            for (int k = 0; k < cols_; ++k)
+            {
+                sum += data_[i * cols_ + k] * B.data_[k * B.cols_ + j];
+            }
+            result.data_[i * B.cols_ + j] = sum + C.data_[i];
+        }
+    }
+    return result;
 }

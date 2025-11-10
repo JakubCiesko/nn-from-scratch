@@ -47,6 +47,7 @@ class Matrix
     [[nodiscard]] Matrix broadcast_divide(const Matrix &other, int axis) const;
     [[nodiscard]] Matrix
     argmax(int axis) const; // will use for gettint predictions out of logits
+    [[nodiscard]] Matrix matmul_broadcast_add(const Matrix &B, const Matrix &C) const;
 
   private:
     void initialize(InitMethod method);
