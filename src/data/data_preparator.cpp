@@ -190,3 +190,19 @@ void DataPreparator::standardize_data()
     std::cout << "Test data standardized" << std::endl
               << "All data standardized" << std::endl;
 }
+
+void DataPreparator::save_predictions(const Matrix &logits, const std::string &filename) {
+    Matrix y_hat = logits.argmax(1);
+    std::cout << "Saving predictions to " << filename << std::endl;
+    std::ofstream file(filename);
+    if (!file.is_open())
+    {
+        throw std::runtime_error("Could not open file: " + filename);
+    }
+    for (int i = 0; i < y_hat.rows(); ++i)
+    {
+        int predicted_label = static_cast<int>(y_hat(i, 0));
+        file << predicted_label << "\n";
+    }
+    file.close();
+}

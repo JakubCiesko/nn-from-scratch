@@ -5,6 +5,7 @@
 #define MATRIX_H
 #include <functional>
 #include <vector>
+#include <string>
 
 class Matrix
 {
@@ -36,8 +37,8 @@ class Matrix
     void transpose_inplace();
     [[nodiscard]] Matrix transpose() const;
     // matrix operation
-    [[nodiscard]] Matrix apply(std::function<float(float)> function) const;
-    void apply_inplace(std::function<float(float)> function);
+    void apply_inplace(const std::function<float(float)>& function);
+    [[nodiscard]] Matrix apply(const std::function<float(float)>& function) const;
     [[nodiscard]] Matrix sum_over(int axis) const;
     [[nodiscard]] Matrix mean_over(int axis) const;
     [[nodiscard]] Matrix std_over(int axis) const;
@@ -54,5 +55,10 @@ class Matrix
     int rows_;
     int cols_;
     std::vector<float> data_;
+    void check_dims_match_(const Matrix &other) const; // used for checking whether two matrices shapes match
+    void check_dims_matmul_(const Matrix &other) const; // helper for checking matmul conditions
+    [[nodiscard]] std::string shape_str_() const; // used in helpers dims checkers
+    void check_element_indices_(int row, int col) const;
 };
+
 #endif

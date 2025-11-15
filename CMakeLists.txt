@@ -26,4 +26,5 @@ add_executable(project_repo
         src/neural_network/tensor.cpp
         src/neural_network/optimizer.cpp
         src/data/data_preparator.cpp
+        src/neural_network/network.cpp
 )

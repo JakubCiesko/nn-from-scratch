@@ -4,11 +4,12 @@
 #include "src/neural_network/matrix.h"
 #include "src/neural_network/optimizer.h"
 #include "src/neural_network/tensor.h"
+#include "src/neural_network/network.h"
 
-#include <cmath>   // For sqrtf
-#include <iomanip> // For std::setprecision
+#include <cmath>
+#include <iomanip>
 #include <iostream>
-#include <memory> // For std::shared_ptr
+#include <memory>
 #include <vector>
 
 std::string current_time()
@@ -19,7 +20,7 @@ std::string current_time()
     std::tm *parts = std::localtime(&now_c);
 
     std::ostringstream oss;
-    oss << std::put_time(parts, "%H:%M:%S"); // Format as HH:MM:SS
+    oss << std::put_time(parts, "%H:%M:%S");
     return oss.str();
 }
 
@@ -30,6 +31,7 @@ int main()
     auto start_time = std::chrono::steady_clock::now();
     int batch_size = 64;
     int seed = 42;
+
     DataPreparator data_preparator("../data/", seed, batch_size);
     data_preparator.load_data();
     data_preparator.standardize_data();
@@ -38,27 +40,19 @@ int main()
     Matrix y_train = data_preparator.get_y_train();
 
     // model definition
-    int hidden_dim = 64;
-    Matrix W1_val = (Matrix(28 * 28, hidden_dim, Matrix::InitMethod::KAIMING));
-    Matrix b1_val(1, hidden_dim, Matrix::InitMethod::ZERO);
-    auto W1 = std::make_shared<Tensor>(W1_val, true);
-    auto b1 = std::make_shared<Tensor>(b1_val, true);
+    std::vector<int> architecture = {28 * 28, 64, 128, 10};
+    Network network(architecture);
 
-    Matrix W2_val = (Matrix(hidden_dim, hidden_dim * 2, Matrix::InitMethod::KAIMING));
-    Matrix b2_val(1, hidden_dim * 2, Matrix::InitMethod::ZERO);
-    auto W2 = std::make_shared<Tensor>(W2_val, true);
-    auto b2 = std::make_shared<Tensor>(b2_val, true);
-
-    Matrix W3_val = (Matrix(hidden_dim * 2, 10, Matrix::InitMethod::KAIMING));
-    Matrix b3_val(1, 10, Matrix::InitMethod::ZERO);
-    auto W3 = std::make_shared<Tensor>(W3_val, true);
-    auto b3 = std::make_shared<Tensor>(b3_val, true);
-
-    std::vector model_params{W1, b1, W2, b2, W3, b3};
-    Optimizer optimizer(model_params, 0.01f);
+    Optimizer optimizer(network.get_params(), 0.01f);
     Matrix loss_val(1, 1);
+    auto W1 = network.get_params()[0];
+    auto b1 = network.get_params()[1];
+    auto W2 = network.get_params()[2];
+    auto b2 = network.get_params()[3];
+    auto W3 = network.get_params()[4];
+    auto b3 = network.get_params()[5];
 
-    int epochs = 10;
+    int epochs = 2;
 
     std::cout << "[" << current_time() << "] "
               << "Starting training for " + std::to_string(epochs) + " epochs"
@@ -120,6 +114,7 @@ int main()
 
     Matrix logits = a2.matmul_broadcast_add(W3->value, b3->value);
     float acc = compute_accuracy(logits, data_preparator.get_y_test());
+    data_preparator.save_predictions(logits, "../predictions.csv");
 
     std::cout << "[" << current_time() << "] " << "TEST_ACC: " << acc << std::endl;
     auto end_time = std::chrono::steady_clock::now();

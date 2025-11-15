@@ -15,43 +15,68 @@ Matrix::Matrix(int rows, int cols, InitMethod method)
 
 void Matrix::initialize(InitMethod method)
 {
-    if (method == InitMethod::ZERO)
+    switch (method)
     {
-        std::fill(data_.begin(), data_.end(), 0.0f);
-    }
-    else if (method == InitMethod::ONE)
-    {
-        std::fill(data_.begin(), data_.end(), 1.0f);
-    }
-    else if (method == InitMethod::NORMAL)
-    {
-        std::mt19937 gen(std::random_device{}());
-        std::normal_distribution<float> dist(0.0f, 1.0f);
-        for (auto &x : data_)
-            x = dist(gen);
-    }
-    else if (method == InitMethod::KAIMING)
-    {
-        // TODO: FIX THIS!
-        float stddev = sqrtf(2.0f / static_cast<float>(rows_));
-        std::mt19937 gen(std::random_device{}());
-        std::normal_distribution<float> dist(0.0f, 1.0f);
-        for (auto &x : data_)
-            x = dist(gen) * stddev;
+        case InitMethod::ZERO:
+            std::fill(data_.begin(), data_.end(), 0.0f);
+            break;
+
+        case InitMethod::ONE:
+            std::fill(data_.begin(), data_.end(), 1.0f);
+            break;
+
+        case InitMethod::NORMAL:
+        {
+            std::mt19937 gen(std::random_device{}());
+            std::normal_distribution<float> dist(0.0f, 1.0f);
+            for (auto &x : data_)
+                x = dist(gen);
+            break;
+        }
+
+        case InitMethod::KAIMING:
+        {
+            // TODO: FIX THIS!
+            float stddev = sqrtf(2.0f / static_cast<float>(rows_));
+            std::mt19937 gen(std::random_device{}());
+            std::normal_distribution<float> dist(0.0f, 1.0f);
+            for (auto &x : data_)
+                x = dist(gen) * stddev;
+            break;
+        }
     }
 }
 
+void Matrix::check_dims_match_(const Matrix &other) const {
+    if (rows_ != other.rows_ || cols_ != other.cols_) {
+        throw std::invalid_argument("Matrix dimensions must match. Got " + shape_str_() + " and " + other.shape_str_());
+    }
+}
+
+void Matrix::check_dims_matmul_(const Matrix &other) const {
+    if (cols_ != other.rows_)
+        throw std::invalid_argument("Invalid matrix dimensions for matmul. Got " + shape_str_() + " and " + other.shape_str_());
+}
+
+void Matrix::check_element_indices_(int row, int col) const {
+    if (row < 0 || row >= rows_ || col < 0 || col >= cols_)
+        throw std::out_of_range("Index out of range.");
+}
+
+std::string Matrix::shape_str_() const {
+    return "(" + std::to_string(rows_) +"," + std::to_string(cols_) + ")";
+}
+
+
 void Matrix::set(int row, int col, float value)
 {
-    if (row < 0 || row >= rows_ || col < 0 || col >= cols_)
-        throw std::out_of_range("Index out of range");
+    check_element_indices_(row, col);
     data_[row * cols_ + col] = value;
 }
 
 float Matrix::get(int row, int col) const
 {
-    if (row < 0 || row >= rows_ || col < 0 || col >= cols_)
-        throw std::out_of_range("Index out of range");
+    check_element_indices_(row, col);
     return data_[row * cols_ + col];
 }
 
@@ -67,19 +92,19 @@ int Matrix::rows() const
 
 float &Matrix::operator()(int row, int col)
 {
-    if (row < 0 || row >= rows_ || col < 0 || col >= cols_)
-        throw std::out_of_range("Index out of range");
+    check_element_indices_(row, col);
     return data_[row * cols_ + col];
 }
 float Matrix::operator()(int row, int col) const
 {
-    if (row < 0 || row >= rows_ || col < 0 || col >= cols_)
-        throw std::out_of_range("Index out of range");
+    check_element_indices_(row, col);
     return data_[row * cols_ + col];
 }
 
+//helper function for debugging pruposes, do not use for big matrices.
 void Matrix::print() const
 {
+
     for (int i = 0; i < rows_; ++i)
     {
         for (int j = 0; j < cols_; ++j)
@@ -92,10 +117,7 @@ void Matrix::print() const
 
 Matrix Matrix::operator+(const Matrix &other) const
 {
-    if (rows_ != other.rows_ || cols_ != other.cols_)
-    {
-        throw std::invalid_argument("Matrix sizes must match for addition");
-    }
+    check_dims_match_(other);
     Matrix result(rows_, cols_);
     for (int i = 0; i < rows_ * cols_; ++i)
     {
@@ -116,10 +138,7 @@ Matrix Matrix::operator+(float scalar) const
 
 Matrix Matrix::operator-(const Matrix &other) const
 {
-    if (other.rows_ != rows_ || other.cols_ != cols_)
-    {
-        throw std::invalid_argument("Matrix sizes must match");
-    }
+    check_dims_match_(other);
     Matrix result(rows_, cols_);
     for (int i = 0; i < rows_ * cols_; ++i)
     {
@@ -141,11 +160,11 @@ Matrix Matrix::operator-(float scalar) const
 // This will be enhanced
 Matrix Matrix::operator*(const Matrix &other) const
 {
-    if (cols_ != other.rows_)
-        throw std::invalid_argument("Matrix sizes must match for multiplication");
-    Matrix result(rows_, other.cols_, InitMethod::ZERO);
+    check_dims_matmul_(other);
+    Matrix result(rows_, other.cols_);
 // Cij = dot(Ai*, B*,j) = sum(AiK*bKj)
-#pragma omp parallel for collapse(2)
+#pragma omp parallel for collapse(2) default(none) shared(result, other, rows_, cols_)
+
     for (int i = 0; i < rows_; ++i)
     {
         for (int j = 0; j < other.cols_; ++j)
@@ -199,7 +218,7 @@ Matrix Matrix::transpose() const
     return result;
 }
 
-Matrix Matrix::apply(std::function<float(float)> function) const
+Matrix Matrix::apply(const std::function<float(float)>& function) const
 {
     Matrix result(rows_, cols_);
     for (int i = 0; i < rows_ * cols_; ++i)
@@ -209,7 +228,7 @@ Matrix Matrix::apply(std::function<float(float)> function) const
     return result;
 }
 
-void Matrix::apply_inplace(std::function<float(float)> function)
+void Matrix::apply_inplace(const std::function<float(float)>& function)
 {
     for (int i = 0; i < rows_ * cols_; ++i)
     {
@@ -303,10 +322,7 @@ Matrix Matrix::std_over(int axis) const
 
 Matrix Matrix::elementwise_multiply(const Matrix &other) const
 {
-    if (rows_ != other.rows_ || cols_ != other.cols_)
-    {
-        throw std::invalid_argument("Invalid matrix dimensions");
-    }
+    check_dims_match_(other);
     Matrix result(rows_, cols_);
     for (int i = 0; i < rows_ * cols_; ++i)
     {

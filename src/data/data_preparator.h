@@ -14,9 +14,10 @@
 class DataPreparator
 {
   public:
-    DataPreparator(const std::string &data_root_path, int random_seed = 42,
+    explicit DataPreparator(const std::string &data_root_path, int random_seed = 42,
                    int batch_size = 128);
     void load_data();
+    void save_predictions(const Matrix &logits, const std::string &filename);
     void reset_epoch();
     void standardize_data();
     [[nodiscard]] bool has_next_batch() const;

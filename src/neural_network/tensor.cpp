@@ -80,10 +80,6 @@ Tensor Tensor::operator-(Tensor &other)
 
 Tensor Tensor::elementwise_multiply(Tensor &other)
 {
-    if (value.cols() != other.value.cols() && value.rows() != other.value.rows())
-    {
-        throw std::runtime_error("Tensor::elementwise_multiply() has wrong size");
-    }
     Matrix result_value = value.elementwise_multiply(other.value);
     bool result_requires_grad = requires_grad || other.requires_grad;
     Tensor result(result_value, result_requires_grad);
@@ -96,13 +92,13 @@ Tensor Tensor::elementwise_multiply(Tensor &other)
             {
                 this->grad = this->grad + other.value.elementwise_multiply(result.grad);
                 this->backward();
-            } // chain rule
+            }
 
             if (other.requires_grad)
             {
                 other.grad = other.grad + this->value.elementwise_multiply(result.grad);
                 other.backward();
-            } // chain rule
+            }
         };
     }
     return result;
@@ -110,14 +106,6 @@ Tensor Tensor::elementwise_multiply(Tensor &other)
 
 Tensor Tensor::operator*(Tensor &other)
 {
-    if (value.cols() != other.value.rows())
-    {
-        throw std::runtime_error("Tensor::operator*(): Tensors have wrong size (" +
-                                 std::to_string(value.rows()) + ", " +
-                                 std::to_string(value.cols()) + ") x (" +
-                                 std::to_string(other.value.rows()) + "," +
-                                 std::to_string(other.value.cols()) + ")");
-    }
     Matrix result_value = value * other.value;
     bool result_requires_grad = requires_grad || other.requires_grad;
     Tensor result(result_value, result_requires_grad);
@@ -145,7 +133,6 @@ Tensor Tensor::operator*(Tensor &other)
 
 Tensor Tensor::broadcast_add(Tensor &other, int axis)
 {
-    // i let matrix class handle the errors
     Matrix result_value = value.broadcast_add(other.value, axis);
     bool result_requires_grad = requires_grad || other.requires_grad;
     Tensor result(result_value, result_requires_grad);
