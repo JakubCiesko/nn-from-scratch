@@ -16,15 +16,7 @@ DataPreparator::DataPreparator(const std::string &data_root_path, int random_see
       y_test_one_hot(0, 0)
 {
 
-    if (random_seed == -1)
-    {
-        std::random_device rd;
-        rng = std::mt19937(rd());
-    }
-    else
-    {
-        rng = std::mt19937(static_cast<unsigned int>(random_seed));
-    }
+    rng = std::mt19937(static_cast<unsigned int>(random_seed));
 }
 
 Matrix DataPreparator::load_vectors(const std::string &filename, int num_rows,
@@ -40,6 +32,7 @@ Matrix DataPreparator::load_vectors(const std::string &filename, int num_rows,
 
     std::string line;
     std::string value;
+    // line by line parsing of csv values
     for (int i = 0; i < num_rows; ++i)
     {
         if (!std::getline(file, line))
@@ -108,13 +101,15 @@ void DataPreparator::load_data()
     X_train = load_vectors(base_path + "fashion_mnist_train_vectors.csv", 60000,
                            28 * 28, false);
     std::cout << "Loading train data labels (60 000 labels) - 10 classes" << std::endl;
-    y_train =
-        load_labels(base_path + "fashion_mnist_train_labels.csv", 60000, false, 10);
+    y_train = load_labels(base_path + "fashion_mnist_train_labels.csv", 60000, false, 10);
     std::cout << "Loading test data vectors (10 000 vecs)" << std::endl;
     X_test = load_vectors(base_path + "fashion_mnist_test_vectors.csv", 10000, 28 * 28,
                           false);
     std::cout << "Loading test data labels (10 000 vecs) - 10 classes" << std::endl;
     y_test = load_labels(base_path + "fashion_mnist_test_labels.csv", 10000, false, 10);
+
+    // the random order of train samples is achieved through using randomly shuffled train indices
+    // shuffling occrus in reset_epoch method
     train_indices_.resize(X_train.rows());
 
     for (int i = 0; i < X_train.rows(); ++i)
@@ -128,6 +123,7 @@ void DataPreparator::load_data()
 void DataPreparator::reset_epoch()
 {
     current_train_index = 0;
+    // reshuffling train indices to have different batches in this new epoch
     std::shuffle(train_indices_.begin(), train_indices_.end(), rng);
 }
 
@@ -154,6 +150,7 @@ std::pair<Matrix, Matrix> DataPreparator::get_batch()
             y_batch(i, j) = y_train.get(shuffled_index, j);
         }
     }
+    // move to new train index
     current_train_index = to;
     return {X_batch, y_batch};
 }
@@ -177,7 +174,7 @@ void DataPreparator::standardize_data()
         }
     }
     std::cout << "Train data standardized" << std::endl;
-    // oopaaa, mind that data leakage :D
+    // careful here, test data must be standardized with train-data computed statistics
     std::cout << "Standardizing test data" << std::endl;
     for (int i = 0; i < X_test.rows(); ++i)
     {
@@ -192,6 +189,7 @@ void DataPreparator::standardize_data()
 }
 
 void DataPreparator::save_predictions(const Matrix &logits, const std::string &filename) {
+    // inputs are logits, outputs are class labels got as output from argmax over columns.
     Matrix y_hat = logits.argmax(1);
     std::cout << "Saving predictions to " << filename << std::endl;
     std::ofstream file(filename);
