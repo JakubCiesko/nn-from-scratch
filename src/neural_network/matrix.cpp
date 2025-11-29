@@ -7,13 +7,13 @@
 #include <stdexcept>
 
 // init code
-Matrix::Matrix(int rows, int cols, InitMethod method)
+Matrix::Matrix(int rows, int cols, InitMethod method, std::mt19937* gen)
     : rows_(rows), cols_(cols), data_(rows * cols)
 {
-    initialize(method);
+    initialize(method, gen);
 }
 
-void Matrix::initialize(InitMethod method)
+void Matrix::initialize(InitMethod method, std::mt19937* gen)
 {
     switch (method)
     {
@@ -22,58 +22,78 @@ void Matrix::initialize(InitMethod method)
             break;
 
         case InitMethod::ONE:
+            // I used this mainly for experiments whether i coded matrix algebra right
             std::fill(data_.begin(), data_.end(), 1.0f);
             break;
 
         case InitMethod::NORMAL:
         {
-            std::mt19937 gen(std::random_device{}());
+            if (gen == nullptr) {
+                throw std::invalid_argument("Generator cannot be null for NORMAL init");
+            }
             std::normal_distribution<float> dist(0.0f, 1.0f);
             for (auto &x : data_)
-                x = dist(gen);
+                x = dist(*gen);
             break;
         }
 
         case InitMethod::KAIMING:
         {
-            // TODO: FIX THIS!
-            float stddev = sqrtf(2.0f / static_cast<float>(rows_));
-            std::mt19937 gen(std::random_device{}());
+            if (gen == nullptr) {
+                throw std::invalid_argument("Generator cannot be null for NORMAL init");
+            }
+            float stddev = sqrtf(2.0f / static_cast<float>(rows_)); // n_features_in = cols_
+            // mathematically equivalent to just ... dist(0.0f, stddev); but it keeps the code style as in NORMAL
             std::normal_distribution<float> dist(0.0f, 1.0f);
             for (auto &x : data_)
-                x = dist(gen) * stddev;
+                x = dist(*gen) * stddev;
             break;
         }
     }
 }
 
+/*
+* checks whether dims of two matrices are the same. used for elementwise operators such as +, -, elementwise *, ...
+*/
 void Matrix::check_dims_match_(const Matrix &other) const {
     if (rows_ != other.rows_ || cols_ != other.cols_) {
         throw std::invalid_argument("Matrix dimensions must match. Got " + shape_str_() + " and " + other.shape_str_());
     }
 }
-
+/*
+* checks matrix dimension for matrix multiplication
+*/
 void Matrix::check_dims_matmul_(const Matrix &other) const {
     if (cols_ != other.rows_)
         throw std::invalid_argument("Invalid matrix dimensions for matmul. Got " + shape_str_() + " and " + other.shape_str_());
 }
-
+/*
+* checkes whether provided indices are inside matrix limits
+*/
 void Matrix::check_element_indices_(int row, int col) const {
     if (row < 0 || row >= rows_ || col < 0 || col >= cols_)
         throw std::out_of_range("Index out of range.");
 }
 
+/*
+* helper method for displaying messages about shape mismatches
+*/
 std::string Matrix::shape_str_() const {
     return "(" + std::to_string(rows_) +"," + std::to_string(cols_) + ")";
 }
 
-
+/*
+* checks whether row, col inside matrix bounds and sets value at this place
+*/
 void Matrix::set(int row, int col, float value)
 {
     check_element_indices_(row, col);
     data_[row * cols_ + col] = value;
 }
 
+/*
+* checks whether row, col inside matrix bounds and gets value from this place
+*/
 float Matrix::get(int row, int col) const
 {
     check_element_indices_(row, col);
@@ -90,6 +110,9 @@ int Matrix::rows() const
     return rows_;
 }
 
+/*
+* () operator for getter / setter
+*/
 float &Matrix::operator()(int row, int col)
 {
     check_element_indices_(row, col);
@@ -115,6 +138,8 @@ void Matrix::print() const
     }
 }
 
+
+// basic matrix algebra
 Matrix Matrix::operator+(const Matrix &other) const
 {
     check_dims_match_(other);
@@ -311,7 +336,7 @@ Matrix Matrix::std_over(int axis) const
             float sum = 0.0f;
             for (int j = 0; j < cols_; ++j)
             {
-                sum += powf((data_[i * cols_ + j] - mean(j, 0)), 2.0f);
+                sum += powf((data_[i * cols_ + j] - mean(i, 0)), 2.0f); //  j -> i
             }
             result.data_[i] = sqrtf(sum / static_cast<float>(cols_));
         }
@@ -489,4 +514,46 @@ Matrix Matrix::matmul_broadcast_add(const Matrix &B, const Matrix &C) const
         }
     }
     return result;
+}
+
+/*
+ * this method bypasses matrix creation on each method pass
+ */
+void Matrix::matmul(const Matrix &other, Matrix &result) const {
+
+        check_dims_matmul_(other);
+#pragma omp parallel for collapse(2) default(none) shared(result, other, rows_, cols_)
+
+         for (int i = 0; i < rows_; ++i)
+        {
+             for (int j = 0; j < other.cols_; ++j)
+            {
+                float sum = 0.0f;
+                for (int k = 0; k < cols_; ++k)
+                {
+                    sum += data_[i * cols_ + k] * other.data_[k * other.cols_ + j];
+                }
+                result.data_[i * other.cols_ + j] = sum;
+            }
+        }
+}
+
+void Matrix::matmul_broadcast_add_prealloc(const Matrix &B, const Matrix &C, Matrix &result) const {
+
+    if (cols_ != B.rows())
+        throw std::invalid_argument("Invalid matrix dimensions");
+
+#pragma omp parallel for collapse(2)
+    for (int i = 0; i < rows_; ++i)
+    {
+        for (int j = 0; j < B.cols_; ++j)
+        {
+            float sum = 0.0f;
+            for (int k = 0; k < cols_; ++k)
+            {
+                sum += data_[i * cols_ + k] * B.data_[k * B.cols_ + j];
+            }
+            result.data_[i * B.cols_ + j] = sum + C.data_[j];
+        }
+    }
 }

@@ -8,8 +8,9 @@
 
 #ifndef TENSOR_H
 #define TENSOR_H
-#include "matrix.h"
 
+#include "matrix.h"
+#include <vector>
 class Tensor
 {
   public:
@@ -28,7 +29,11 @@ class Tensor
     [[nodiscard]] Tensor cross_entropy_loss(const Tensor &y_true);
     [[nodiscard]] Tensor broadcast_add(Tensor &, int);
     [[nodiscard]] Tensor matmul_broadcast_add( Tensor &B, Tensor &C);
-
+    void matmul(Tensor &B, Tensor &result);
+    void matmul_broadcast_add_prealloc(Tensor &B, Tensor &C, Tensor &result);
+    void relu_prealloc(Tensor &result);
+    void relu_inplace();
+    std::vector<Tensor*> parents;
 };
 
 #endif // TENSOR_H

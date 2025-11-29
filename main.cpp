@@ -12,6 +12,51 @@
 #include <memory>
 #include <vector>
 
+struct TrainingParams {
+    int epochs;
+    int batch_size;
+    float adam_lr;
+    float adam_beta1;
+    float adam_beta2;
+};
+std::string current_time();
+float compute_accuracy(const Matrix &logits, const Matrix &y_true);
+
+void prepare_data(DataPreparator &data_preparator, bool standardize_data);
+void train(TrainingParams training_params, Network &network, Optimizer &optimizer, DataPreparator &data_preparator);
+void test(Network &network, DataPreparator &data_preparator);
+
+int main()
+{
+    auto start_time = std::chrono::steady_clock::now();
+    int seed = 42;
+    TrainingParams training_params = {
+        10,
+        128, // 128, 64 and 32 were good, but choppy loss
+        0.0008f,
+        0.9f,
+        0.999f,
+    };
+
+    DataPreparator data_preparator("../data/", seed, training_params.batch_size);
+    prepare_data(data_preparator, true);
+
+    // model definition
+    std::vector<int> architecture = {28 * 28, 64, 32, 10};
+    Network network(architecture, seed);
+    // optimizer definition
+    AdamOptimizer optimizer(network.get_params(), training_params.adam_lr,
+        training_params.adam_beta1, training_params.adam_beta2, 1e-8f);
+
+    train(training_params, network, optimizer, data_preparator);
+    test(network, data_preparator);
+
+    auto end_time = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
+    std::cout << "Total code run time: " << duration.count() << " seconds" << std::endl;
+    return 0;
+}
+
 std::string current_time()
 {
     using namespace std::chrono;
@@ -24,26 +69,15 @@ std::string current_time()
     return oss.str();
 }
 
-float compute_accuracy(const Matrix &logits, const Matrix &y_true);
-
-int main()
-{
-    auto start_time = std::chrono::steady_clock::now();
-    int batch_size = 64;
-    int seed = 42;
-
-    DataPreparator data_preparator("../data/", seed, batch_size);
+void prepare_data(DataPreparator &data_preparator, bool standardize_data) {
     data_preparator.load_data();
-    data_preparator.standardize_data();
+    if (standardize_data)
+        data_preparator.standardize_data();
+}
 
-    Matrix X_train = data_preparator.get_X_train();
-    Matrix y_train = data_preparator.get_y_train();
 
-    // model definition
-    std::vector<int> architecture = {28 * 28, 64, 128, 10};
-    Network network(architecture);
+void train(TrainingParams training_params, Network &network, Optimizer &optimizer, DataPreparator &data_preparator) {
 
-    Optimizer optimizer(network.get_params(), 0.01f);
     Matrix loss_val(1, 1);
     auto W1 = network.get_params()[0];
     auto b1 = network.get_params()[1];
@@ -52,13 +86,12 @@ int main()
     auto W3 = network.get_params()[4];
     auto b3 = network.get_params()[5];
 
-    int epochs = 2;
 
     std::cout << "[" << current_time() << "] "
-              << "Starting training for " + std::to_string(epochs) + " epochs"
+              << "Starting training for " + std::to_string(training_params.epochs) + " epochs"
               << std::endl;
 
-    for (int e = 0; e < epochs; ++e)
+    for (int e = 0; e < training_params.epochs; ++e)
     {
 
         int batch_i = 0;
@@ -78,31 +111,41 @@ int main()
             Tensor y_batch(y_batch_mat, false);
 
             // forward pass
-            // forward pass (fused matmul + bias)
+            // forward pass (fused matmul + bias for speed)
             Tensor y1_linear = X_batch.matmul_broadcast_add(*W1, *b1);
             Tensor y1 = y1_linear.relu();
 
             Tensor y2_linear = y1.matmul_broadcast_add(*W2, *b2);
             Tensor y2 = y2_linear.relu();
 
-            Tensor logits = y2.matmul_broadcast_add(*W3, *b3); // fused final layer
-
+            Tensor logits = y2.matmul_broadcast_add(*W3, *b3);
             Tensor loss = logits.cross_entropy_loss(y_batch);
             loss_val = loss.value;
 
             // backprop
             loss.backward();
+            // parameter updates
             optimizer.step();
 
         }
 
-        if (e % 1 == 0 || e == epochs - 1)
+        if (e % 1 == 0 || e == training_params.epochs - 1)
         {
             std::cout << "[" << current_time() << "] " << "[Epoch" << std::setw(2)
                       << e + 1 << "] Loss: ";
             loss_val.print();
         }
     }
+};
+
+
+void test(Network &network, DataPreparator &data_preparator) {
+    auto W1 = network.get_params()[0];
+    auto b1 = network.get_params()[1];
+    auto W2 = network.get_params()[2];
+    auto b2 = network.get_params()[3];
+    auto W3 = network.get_params()[4];
+    auto b3 = network.get_params()[5];
     std::cout << "[" << current_time() << "] " << "Testing" << std::endl;
     Matrix X_test(data_preparator.get_X_test());
     // wild thing:
@@ -117,12 +160,8 @@ int main()
     data_preparator.save_predictions(logits, "../predictions.csv");
 
     std::cout << "[" << current_time() << "] " << "TEST_ACC: " << acc << std::endl;
-    auto end_time = std::chrono::steady_clock::now();
-    auto duration =
-        std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
-    std::cout << "Total code run time: " << duration.count() << " seconds" << std::endl;
-    return 0;
-}
+};
+
 
 float compute_accuracy(const Matrix &logits, const Matrix &y_true)
 {
@@ -139,4 +178,4 @@ float compute_accuracy(const Matrix &logits, const Matrix &y_true)
             correct++;
     }
     return static_cast<float>(correct) / static_cast<float>(y_hat.rows());
-}
+};

@@ -5,6 +5,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <chrono>
+#include <random>
 
 // helper to log results with time data
 // std::string current_time()
@@ -19,22 +20,46 @@
 //     return oss.str();
 // }
 
-Network::Network(const std::vector<int> &layer_sizes) {
-    if (layer_sizes.size() < 2)
-    {
+Network::Network(const std::vector<int> &layer_sizes, int seed) {
+    std::mt19937 gen(seed);
+    if (layer_sizes.size() < 2) {
         throw std::invalid_argument("Not enough layers. Need at least 2.");
     }
     for (size_t i = 0; i < layer_sizes.size() - 1; i++) {
         int in_dim = layer_sizes[i];
         int out_dim = layer_sizes[i + 1];
-        Matrix W_val(in_dim, out_dim, Matrix::InitMethod::KAIMING);
+
+        Matrix W_val(in_dim, out_dim, Matrix::InitMethod::KAIMING, &gen);
         auto W = std::make_shared<Tensor>(W_val, true);
-        Matrix b_val(1, out_dim, Matrix::InitMethod::ZERO);
+        Matrix b_val(1, out_dim, Matrix::InitMethod::ZERO, &gen);
         auto b = std::make_shared<Tensor>(b_val, true);
+
+
+
         params_.push_back(W);
         params_.push_back(b);
     }
 }
+
+
+Tensor Network::forward(const Tensor &X) const {
+    Tensor out = X;
+    for (size_t i = 0; i < params_.size(); i += 2) {
+        // apply linear layer of weight and bias
+        auto &W = *params_[i];
+        auto &b = *params_[i + 1];
+        Tensor z = out.matmul_broadcast_add(W, b);
+        // all but last layers use relu
+        if (i + 2 < params_.size()) {
+            out = z.relu();
+        } else {
+            out = z;
+        }
+    }
+    return out;
+}
+
+
 //
 // // I presuppose there is both bias and weights. If you do not want bias, set it to zero matrix non trainable
 // Tensor Network::forward(Tensor &X) const {

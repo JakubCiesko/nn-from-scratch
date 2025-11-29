@@ -1,6 +1,6 @@
 .idea/
-data/
 cmake-build-debug/
 logs/
 xor.cpp
 run.sh
+benchmarks/
