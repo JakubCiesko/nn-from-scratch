@@ -10,6 +10,7 @@
 #include <iomanip>
 #include <iostream>
 #include <memory>
+#include <memory>
 #include <vector>
 
 struct TrainingParams {
@@ -23,15 +24,17 @@ std::string current_time();
 float compute_accuracy(const Matrix &logits, const Matrix &y_true);
 
 void prepare_data(DataPreparator &data_preparator, bool standardize_data);
-void train(TrainingParams training_params, Network &network, Optimizer &optimizer, DataPreparator &data_preparator);
-void test(Network &network, DataPreparator &data_preparator);
+void train(TrainingParams training_params, Network &network,
+    Optimizer &optimizer, DataPreparator &data_preparator);
+void predict(Network &network, DataPreparator &data_preparator,
+    bool is_test, const std::string &filename);
 
 int main()
 {
     auto start_time = std::chrono::steady_clock::now();
     int seed = 42;
     TrainingParams training_params = {
-        10,
+        2,
         128, // 128, 64 and 32 were good, but choppy loss
         0.0008f,
         0.9f,
@@ -49,7 +52,7 @@ int main()
         training_params.adam_beta1, training_params.adam_beta2, 1e-8f);
 
     train(training_params, network, optimizer, data_preparator);
-    test(network, data_preparator);
+    predict(network, data_preparator, true, "../test_predictions.csv");
 
     auto end_time = std::chrono::steady_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
@@ -79,6 +82,8 @@ void prepare_data(DataPreparator &data_preparator, bool standardize_data) {
 void train(TrainingParams training_params, Network &network, Optimizer &optimizer, DataPreparator &data_preparator) {
 
     Matrix loss_val(1, 1);
+    auto network_params = network.get_params();
+    // now just for loop instead of the below provided thing ?
     auto W1 = network.get_params()[0];
     auto b1 = network.get_params()[1];
     auto W2 = network.get_params()[2];
@@ -86,7 +91,12 @@ void train(TrainingParams training_params, Network &network, Optimizer &optimize
     auto W3 = network.get_params()[4];
     auto b3 = network.get_params()[5];
 
-
+    Tensor y1_linear(Matrix(training_params.batch_size, W1->value.cols()), true);
+    Tensor y1(Matrix(training_params.batch_size, W1->value.cols()), true);
+    Tensor y2_linear(Matrix(training_params.batch_size,W2->value.cols()), true);
+    Tensor y2(Matrix(training_params.batch_size,W2->value.cols()), true);
+    Tensor logits(Matrix(training_params.batch_size, W3 -> value.cols()), true);
+    Tensor loss(Matrix(1,1), true);
     std::cout << "[" << current_time() << "] "
               << "Starting training for " + std::to_string(training_params.epochs) + " epochs"
               << std::endl;
@@ -138,29 +148,20 @@ void train(TrainingParams training_params, Network &network, Optimizer &optimize
     }
 };
 
+void predict(Network &network, DataPreparator &data_preparator,
+                          bool is_test, const std::string &filename) {
 
-void test(Network &network, DataPreparator &data_preparator) {
-    auto W1 = network.get_params()[0];
-    auto b1 = network.get_params()[1];
-    auto W2 = network.get_params()[2];
-    auto b2 = network.get_params()[3];
-    auto W3 = network.get_params()[4];
-    auto b3 = network.get_params()[5];
-    std::cout << "[" << current_time() << "] " << "Testing" << std::endl;
-    Matrix X_test(data_preparator.get_X_test());
-    // wild thing:
-    Matrix z1 = X_test.matmul_broadcast_add(W1->value, b1->value);
-    Matrix a1 = z1.apply([](float val) { return std::max(0.0f, val); });
-
-    Matrix z2 = a1.matmul_broadcast_add(W2->value, b2->value);
-    Matrix a2 = z2.apply([](float val) { return std::max(0.0f, val); });
-
-    Matrix logits = a2.matmul_broadcast_add(W3->value, b3->value);
-    float acc = compute_accuracy(logits, data_preparator.get_y_test());
-    data_preparator.save_predictions(logits, "../predictions.csv");
-
-    std::cout << "[" << current_time() << "] " << "TEST_ACC: " << acc << std::endl;
-};
+    const std::string data_name =  is_test? "Test Data" : "Train Data";
+    std::cout << "[" << current_time() << "] Generating" << data_name << " predictions to: " << filename << std::endl;
+    Matrix X_data = is_test ? data_preparator.get_X_test() : data_preparator.get_X_train();
+    Matrix y_data = is_test ? data_preparator.get_y_test() : data_preparator.get_y_train();
+    Tensor X(X_data);
+    Tensor logits = network.forward(X);
+    float acc = compute_accuracy(logits.value, y_data);
+    // this takes away from time limit, but it is nice feature
+    std::cout << data_name << " Accuracy: " << acc << std::endl;
+    data_preparator.save_predictions(logits.value, filename);
+}
 
 
 float compute_accuracy(const Matrix &logits, const Matrix &y_true)
