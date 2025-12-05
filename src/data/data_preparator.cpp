@@ -49,7 +49,7 @@ Matrix DataPreparator::load_vectors(const std::string &filename, int num_rows,
                 throw std::runtime_error("File error: Not enough columns in row " +
                                          std::to_string(i));
             }
-            data(i, j) = std::stof(value) / 255.0f; // normalization
+            data(i, j) = std::stof(value) / 255.0f; // normalization -- make (0,1)
         }
         if (verbose && (i + 1) % 10000 == 0)
         {

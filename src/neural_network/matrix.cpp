@@ -500,19 +500,21 @@ Matrix Matrix::matmul_broadcast_add(const Matrix &B, const Matrix &C) const
     if (cols_ != B.rows())
         throw std::invalid_argument("Invalid matrix dimensions");
     Matrix result(rows_, B.cols());
-    #pragma omp parallel for collapse(2)
+
+    #pragma omp parallel for
     for (int i = 0; i < rows_; ++i)
-    {
         for (int j = 0; j < B.cols_; ++j)
+            result.data_[i * B.cols_ + j] = C.data_[j];
+
+
+    #pragma omp parallel for
+    for (int i = 0; i < rows_; ++i)
+        for (int k = 0; k < cols_; ++k)
         {
-            float sum = 0.0f;
-            for (int k = 0; k < cols_; ++k)
-            {
-                sum += data_[i * cols_ + k] * B.data_[k * B.cols_ + j];
-            }
-            result.data_[i * B.cols_ + j] = sum + C.data_[j];
+            float a = data_[i * cols_ + k];
+            for (int j = 0; j < B.cols_; ++j)
+                result.data_[i * B.cols_ + j] += a * B.data_[k * B.cols_ + j];
         }
-    }
     return result;
 }
 

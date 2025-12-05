@@ -18,7 +18,7 @@ class Tensor
     Matrix value;
     Matrix grad;
     bool requires_grad;
-    std::function<void()> backward_fn;
+    std::function<void(const Tensor& self)> backward_fn;
     void backward();
     void zero_grad();
     [[nodiscard]] Tensor operator+(Tensor &);
@@ -33,6 +33,7 @@ class Tensor
     void matmul_broadcast_add_prealloc(Tensor &B, Tensor &C, Tensor &result);
     void relu_prealloc(Tensor &result);
     void relu_inplace();
+    [[nodiscard]] Tensor dropout(float p, bool training);
     std::vector<Tensor*> parents;
 };
 

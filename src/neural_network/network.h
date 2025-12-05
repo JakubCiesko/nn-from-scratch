@@ -4,23 +4,25 @@
 
 #ifndef NETWORK_H
 #define NETWORK_H
+#include <deque>
 #include "tensor.h"
-#include "matrix.h"
-#include "optimizer.h"
 #include <vector>
-
 #include <memory>
-#include "../data/data_preparator.h"
+
 
 class Network {
     public:
-    Network(const std::vector<int> &layer_sizes, int seed=42);
+    Network(const std::vector<int> &layer_sizes, bool use_dropout, float dropout_p=0.5, int seed=42);
     [[nodiscard]] std::vector<std::shared_ptr<Tensor>> &get_params()  {return params_;};
-    void train(int epochs, DataPreparator &data_preparator, Optimizer &optimizer);
-    Tensor forward(const Tensor &X) const;
-    Matrix test(DataPreparator &data_preparator) const; // return logits
+    // returns logits, training flag is used for dropout if use_dropout set to true
+    Tensor forward(const Tensor& X, bool training) const ;
+
 private:
+    bool use_dropout_;
+    float dropout_p_;
     std::vector<std::shared_ptr<Tensor>> params_;
+    // this deque will keep all tensors alive until backward()
+    mutable std::deque<Tensor> tape;
 };
 
 #endif //NETWORK_H

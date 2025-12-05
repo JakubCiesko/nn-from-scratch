@@ -4,3 +4,4 @@ logs/
 xor.cpp
 run.sh
 benchmarks/
+data/

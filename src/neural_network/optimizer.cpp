@@ -63,3 +63,25 @@ void AdamOptimizer::step()
         }
     }
 }
+
+AdamWOptimizer::AdamWOptimizer(const std::vector<std::shared_ptr<Tensor> > &params, float learning_rate, float beta1, float beta2, float weight_decay, float epsilon):
+    AdamOptimizer(params, learning_rate, beta1, beta2, epsilon), weight_decay(weight_decay){};
+
+
+void AdamWOptimizer::step() {
+    // formulas from https://optimization.cbe.cornell.edu/index.php?title=AdamW
+    // this is basically the same as Adam optim. only that there is weight decay applied to parameter values
+    timestep++;
+    for (size_t i = 0; i < params.size(); ++i)
+    {
+        auto& param = params[i];
+        if (param->requires_grad) {
+            m[i] = m[i] * beta1 + (param -> grad )* (1.0f - beta1);
+            v[i] = v[i] * beta2 + (param -> grad).elementwise_multiply(param -> grad) * (1.0f - beta2);
+            Matrix m_correction = m[i] * (1.0f / (1.0f - powf(beta1, timestep)));
+            Matrix v_correction = v[i] * (1.0f / (1.0f - powf(beta2, timestep)));
+            param->value = param->value - m_correction.elementwise_multiply(
+            v_correction.apply([this](const float el){ return 1.0f / (sqrtf(el) + epsilon); })) * lr - param->value*weight_decay*lr;
+        }
+    }
+}
