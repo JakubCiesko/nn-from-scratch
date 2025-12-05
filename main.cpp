@@ -26,7 +26,9 @@ int main() {
     prepare_data(data_preparator, true);
 
     //28*28, 512, 256, 128, 10
-    Network network({28*28, 256, 128, 64, 10}, false, 0.1f, 42);
+    //28*28, 256, 128, 64, 10
+    //28*28, 256, 128, 32, 10
+    Network network({28*28, 256, 128, 16, 10}, false, 0.5f, 42);
     AdamWOptimizer optimizer(network.get_params(), training_params.adam_lr,
                              training_params.adam_beta1, training_params.adam_beta2,
                              training_params.weight_decay, training_params.epsilon);

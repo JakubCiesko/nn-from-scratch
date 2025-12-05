@@ -393,17 +393,18 @@ void Tensor::relu_prealloc(Tensor &result) {
 
 
 Tensor Tensor::dropout(const float p, const bool training=true) {
-    Tensor result = *this;
     // dropout is not to be used in test pass, also drop invalid probability values
     if (!training || p <= 0.0f)
-        return result;
+        return *this;
 
     Matrix mask(value.rows(), value.cols()); // the same as input, now initialized as zeros only
-    std::mt19937 gen(42); // for now hardcoded seed
-    std::bernoulli_distribution dist(p);
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    std::bernoulli_distribution dist(1.0f-p);
     mask.apply_inplace([&](float) { return dist(gen) ? 1.0f : 0.0f; });
 
     // dropout is applying 1/0 mask to input
+    Tensor result = *this;
     result.value = value.elementwise_multiply(mask) * (1.0f / p);
     // applying the same mask to backward signal
     if (requires_grad) {
