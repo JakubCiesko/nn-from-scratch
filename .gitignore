@@ -5,3 +5,5 @@ xor.cpp
 run.sh
 benchmarks/
 data/
+train_predictions.csv
+test_predictions.csv
