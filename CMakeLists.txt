@@ -22,7 +22,7 @@ endif()
 
 add_executable(
 		neural_network
-        main.cpp
+        src/main.cpp
         src/neural_network/matrix.cpp
         src/neural_network/tensor.cpp
         src/neural_network/optimizer.cpp

@@ -2,10 +2,10 @@
 #include <iostream>
 #include <ostream>
 
-#include "src/utils/train.h"
-#include "src/data/data_preparator.h"
-#include "src/neural_network/network.h"
-#include "src/neural_network/optimizer.h"
+#include "./utils/train.h"
+#include "./data/data_preparator.h"
+#include "./neural_network/network.h"
+#include "./neural_network/optimizer.h"
 
 
 int main() {
