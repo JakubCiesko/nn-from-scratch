@@ -11,15 +11,29 @@
 
 // Tensor is emballage for Matrix + Gradients.
 // TODO: Implement individual layers as subclasses of Tensor
+
+/**
+ * Constructs a tensor with given value and gradient requirement.
+ * @param value Initial value of the tensor.
+ * @param requires_grad If true, gradients will be tracked for this tensor.
+ */
 Tensor::Tensor(const Matrix &value, bool requires_grad)
     : value(value), grad(value.rows(), value.cols(), Matrix::InitMethod::ZERO),
       requires_grad(requires_grad), backward_fn(nullptr){};
-
+/**
+ * Resets the gradient of this tensor to zero.
+ */
 void Tensor::zero_grad()
 {
-    grad = Matrix(grad.rows(), grad.cols(), Matrix::InitMethod::ZERO);
+    grad.fill(0.0f);
 }
 
+/**
+ * Performs backpropagation to compute gradients for all tensors in the computational graph.
+ * Seeds gradient with 1 if the tensor is a scalar.
+ * Uses a depth-first search to traverse the computational graph in topological order, then
+ * applies the backward function in reverse order.
+ */
 void Tensor::backward()
 {
     // seed gradient
@@ -47,7 +61,10 @@ void Tensor::backward()
     }
 }
 
-// todo
+/**
+ * Operator + on Tensors, does matrix + matrix but also adds requires_grad to result if any of parents require grad.
+ * Adds parents of that tensor.
+ */
 Tensor Tensor::operator+(Tensor &other)
 {
     Matrix result_value = value + other.value;
@@ -61,17 +78,16 @@ Tensor Tensor::operator+(Tensor &other)
             if (this->requires_grad)
             {
                 this->grad = this->grad + self.grad;
-                //this->backward();
             }
             if (other.requires_grad)
             {
                 other.grad = other.grad + self.grad; // propagation of gradients
-                //other.backward();
             }
         };
     }
     return result;
 }
+
 
 Tensor Tensor::operator-(Tensor &other)
 {
@@ -86,18 +102,26 @@ Tensor Tensor::operator-(Tensor &other)
             if (this->requires_grad)
             {
                 this->grad = this->grad + self.grad;
-                //this->backward();
+
             }
             if (other.requires_grad)
             {
                 other.grad = other.grad - self.grad; // propagation of gradients
-                //other.backward();
             }
         };
     }
     return result;
 }
 
+/**
+ * Performs elementwise multiplication between this tensor and another tensor.
+ * Returns a new tensor representing the elementwise product.
+ *
+ * Backpropagation logic:
+ * - The backward function computes gradients for each parent:
+ *   - d(this)/d(result) = other.value * grad(result)
+ *   - d(other)/d(result) = this->value * grad(result)
+ */
 Tensor Tensor::elementwise_multiply(Tensor &other)
 {
     Matrix result_value = value.elementwise_multiply(other.value);
@@ -111,19 +135,21 @@ Tensor Tensor::elementwise_multiply(Tensor &other)
             if (this->requires_grad)
             {
                 this->grad = this->grad + other.value.elementwise_multiply(self.grad);
-                //this->backward();
+
             }
 
             if (other.requires_grad)
             {
                 other.grad = other.grad + this->value.elementwise_multiply(self.grad);
-                //other.backward();
             }
         };
     }
     return result;
 }
 
+/**
+ * Matmul with backprop
+ */
 Tensor Tensor::operator*(Tensor &other)
 {
     Matrix result_value = value * other.value;
@@ -139,18 +165,24 @@ Tensor Tensor::operator*(Tensor &other)
             if (this->requires_grad)
             {
                 this->grad = this->grad + self.grad * other.value.transpose();
-                //this->backward();
             }
             if (other.requires_grad)
             {
                 other.grad = other.grad + this->value.transpose() * self.grad;
-                //other.backward();
             }
         };
     }
     return result;
 }
 
+/**
+ * broadcasted addition between this tensor and another tensor along the given axis. Returns a new tensor representing the result.
+ *
+ * Backpropagation:
+ * - If this tensor requires gradients, the gradient is propagated directly (d(self)/d(this) = 1).
+ * - If the other tensor requires gradients, the gradient is summed over the broadcasted axis
+ *   to match its original shape (chain rule for broadcasting).
+ */
 Tensor Tensor::broadcast_add(Tensor &other, int axis)
 {
     Matrix result_value = value.broadcast_add(other.value, axis);
@@ -165,19 +197,21 @@ Tensor Tensor::broadcast_add(Tensor &other, int axis)
             if (this->requires_grad)
             {
                 this->grad = this->grad + self.grad;
-                //this->backward();
             }
-
             if (other.requires_grad)
             {
                 other.grad = other.grad + self.grad.sum_over(axis);
-                //other.backward();
             }
         };
     }
     return result;
 }
 
+/**
+ * Returns a new tensor representing the result of applying relu to tensor.
+ * Backpropagation is application of mask of 0s and 1s based on value of tensor,
+ * this is then applied to backflowing gradient.
+ */
 Tensor Tensor::relu()
 {
     std::function relu_fn = [](float val) { return std::max(0.0f, val); };
@@ -194,14 +228,13 @@ Tensor Tensor::relu()
                 Matrix mask = this->value.apply([](float val)
                                                 { return (val < 0.0f) ? 0.0f : 1.0f; });
                 this->grad = this->grad + self.grad.elementwise_multiply(mask);
-                //this->backward();
             };
         };
     }
     return result;
 }
 
-/*
+/**
  * function to stabilize logit values -- shifts them row-wise by row maximum
  * to prevent overflow when calculating exponential
  */
@@ -212,6 +245,10 @@ Matrix stabilize_logits(const Matrix &logits)
 }
 
 
+/**
+ * Compute log-softmax row-wise.
+ * Returns: log_softmax, exp(safe_logits), sum_exps
+ */
 std::tuple<Matrix, Matrix, Matrix> log_softmax_rows(const Matrix &safe_logits)
 {
     Matrix exps = safe_logits.apply(exp);      // exp(z)
@@ -225,6 +262,11 @@ std::tuple<Matrix, Matrix, Matrix> log_softmax_rows(const Matrix &safe_logits)
     return {log_softmax, exps, sum_exps};
 }
 
+
+/**
+ * Cross-entropy loss for classification
+ * Backprop: dL/dlogits = (softmax - y_true_one_hot) / batch_size
+ */
 Tensor Tensor::cross_entropy_loss(const Tensor &y_true)
 {
     const Matrix &logits = this->value;
@@ -258,10 +300,12 @@ Tensor Tensor::cross_entropy_loss(const Tensor &y_true)
     // softmax values for each class
     Matrix softmax_probs = exps.broadcast_divide(sum_exps, 1);
 
+    // cache softmax probabilities and true labels for use in backward pass
     auto softmax_probs_cache = std::move(softmax_probs);
     auto y_true_labels_cache = y_true.value;
 
     auto &logits_tensor = *this;
+    // computational graph this tensor is parent of loss
     result.parents.push_back(this);
     result.backward_fn = [&logits_tensor, y_true_labels_cache, softmax_probs_cache,
                           num_classes](const Tensor &self) mutable
@@ -271,6 +315,7 @@ Tensor Tensor::cross_entropy_loss(const Tensor &y_true)
         {
             const int batch_size = logits_tensor.value.rows();
 
+            // label to one hot
             Matrix y_true_one_hot(batch_size, num_classes, Matrix::InitMethod::ZERO);
             for (int i = 0; i < batch_size; ++i)
             {
@@ -278,22 +323,80 @@ Tensor Tensor::cross_entropy_loss(const Tensor &y_true)
                 y_true_one_hot.set(i, correct_class, 1.0f);
             }
 
+            // gradient: softmax - one_hot
             Matrix grad_logits = softmax_probs_cache - y_true_one_hot;
+            // average over batch
             Matrix mean_grad_logits =
                 grad_logits * (1.0f / static_cast<float>(batch_size));
-
+            // accumulate gradient into tensor
             logits_tensor.grad = logits_tensor.grad + mean_grad_logits;
-            //logits_tensor.backward();
         }
     };
 
     return result;
 }
 
-
+/**
+ * Matmul of this tensor with B and adds C (broadcasted). Fuses multiple operations into one using fused matrix method.
+ * Faster than matmul + add.
+ * Returns new tensor.
+ */
 Tensor Tensor::matmul_broadcast_add(Tensor &B, Tensor &C) {
     Matrix result_value = value.matmul_broadcast_add(B.value, C.value);
     Tensor result(result_value, requires_grad || B.requires_grad || C.requires_grad);
+    if (result.requires_grad) {
+        result.parents = { this, &B, &C };
+        result.backward_fn = [this, &B, &C](const Tensor &self) mutable
+        {
+            if (this->requires_grad)
+            {
+                this->grad = this->grad + self.grad * B.value.transpose();
+            }
+            if (B.requires_grad)
+            {
+                B.grad = B.grad + this->value.transpose() * self.grad;
+            }
+            if (C.requires_grad) {
+                C.grad = C.grad + self.grad.sum_over(0);
+            }
+        };
+    }
+    return result;
+}
+
+/**
+ * Matmul of tensors. Equivalent of operator* but uses preallocated tensor.
+ */
+void Tensor::matmul(Tensor &other, Tensor &result) {
+    value.matmul(other.value, result.value);
+    result.requires_grad = other.requires_grad || requires_grad;
+    if (result.requires_grad)
+    {
+
+        result.backward_fn = [this, &other](const Tensor &self) mutable
+        {
+            // C = AB -> grad(A) = grad(C)trans(B), grad(B) = trans(A) grad(C)
+            if (this->requires_grad)
+            {
+                this->grad = this->grad + self.grad * other.value.transpose();
+            }
+            if (other.requires_grad)
+            {
+                other.grad = other.grad + this->value.transpose() * self.grad;
+            }
+        };
+    }
+
+};
+
+/**
+ * Matmul of this tensor with B and adds C (broadcasted). Fuses multiple operations into one using fused matrix method.
+ * Faster than matmul + add. Uses preallocated resources.
+ * Returns new tensor.
+ */
+void Tensor::matmul_broadcast_add_prealloc(Tensor &B, Tensor &C, Tensor &result) {
+    value.matmul_broadcast_add_prealloc(B.value, C.value, result.value);
+    result.requires_grad = requires_grad || B.requires_grad || C.requires_grad ;
     if (result.requires_grad) {
         result.parents = { this, &B, &C };
         result.backward_fn = [this, &B, &C](const Tensor &self) mutable
@@ -315,74 +418,31 @@ Tensor Tensor::matmul_broadcast_add(Tensor &B, Tensor &C) {
             }
         };
     }
-    return result;
-}
-
-void Tensor::matmul(Tensor &other, Tensor &result) {
-    value.matmul(other.value, result.value);
-    result.requires_grad = other.requires_grad || requires_grad;
-
-    if (result.requires_grad)
-    {
-
-        result.backward_fn = [this, &other](const Tensor &self) mutable
-        {
-            // C = AB -> grad(A) = grad(C)trans(B), grad(B) = trans(A) grad(C)
-            if (this->requires_grad)
-            {
-                this->grad = this->grad + self.grad * other.value.transpose();
-                //this->backward();
-            }
-            if (other.requires_grad)
-            {
-                other.grad = other.grad + this->value.transpose() * self.grad;
-                //other.backward();
-            }
-        };
-    }
-
-};
-void Tensor::matmul_broadcast_add_prealloc(Tensor &B, Tensor &C, Tensor &result) {
-    value.matmul_broadcast_add_prealloc(B.value, C.value, result.value);
-    result.requires_grad = requires_grad || B.requires_grad || C.requires_grad ;
-    if (result.requires_grad) {
-        result.backward_fn = [this, &B, &C](const Tensor &self) mutable
-        {
-
-            if (this->requires_grad)
-            {
-                this->grad = this->grad + self.grad * B.value.transpose();
-                //this->backward();
-            }
-            if (B.requires_grad)
-            {
-                B.grad = B.grad + this->value.transpose() * self.grad;
-                //B.backward();
-            }
-            if (C.requires_grad) {
-                C.grad = C.grad + self.grad.sum_over(0);
-                //C.backward();
-            }
-        };
-    }
 };
 
+/**
+ * Applies ReLU activation in-place.
+ */
 void Tensor::relu_inplace() {
     value.apply_inplace([](float x) { return std::max(0.0f, x); });
 }
 
+
+/**
+ * Applies ReLU activation and stores result in preallocated tensor.
+ */
 void Tensor::relu_prealloc(Tensor &result) {
     std::function relu_fn = [](float val) { return std::max(0.0f, val); };
     result.value = value.apply(relu_fn);
     result.requires_grad = requires_grad;
     if (result.requires_grad)
     {
-
+        result.parents = { this };
         result.backward_fn = [this](const Tensor &self) mutable
         {
             if (this->requires_grad)
             {
-                Matrix mask = this->value.apply([](float val)
+                const Matrix mask = this->value.apply([](float val)
                                                 { return (val < 0.0f) ? 0.0f : 1.0f; });
                 this->grad = this->grad + self.grad.elementwise_multiply(mask);
                 //this->backward();
@@ -392,6 +452,9 @@ void Tensor::relu_prealloc(Tensor &result) {
 }
 
 
+/**
+ * Applies dropout to tensor. Returns new tensor with dropped elements scaled.
+ */
 Tensor Tensor::dropout(const float p, const bool training=true) {
     // dropout is not to be used in test pass, also drop invalid probability values
     if (!training || p <= 0.0f)
@@ -405,13 +468,14 @@ Tensor Tensor::dropout(const float p, const bool training=true) {
 
     // dropout is applying 1/0 mask to input
     Tensor result = *this;
-    result.value = value.elementwise_multiply(mask) * (1.0f / p);
+    const float scale_factor = 1.0f / (1.0f-p);
+    result.value = value.elementwise_multiply(mask) * scale_factor;
     // applying the same mask to backward signal
     if (requires_grad) {
         result.parents = { this };
-        result.backward_fn = [this, mask, p](const Tensor &self) mutable {
+        result.backward_fn = [this, mask, scale_factor](const Tensor &self) mutable {
             if (this->requires_grad) {
-                this->grad = this->grad + self.grad.elementwise_multiply(mask) * (1.0f / p);
+                this->grad = this->grad + self.grad.elementwise_multiply(mask) * scale_factor;
             }
         };
     };

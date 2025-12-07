@@ -9,6 +9,15 @@
 #include <sstream>
 #include <stdexcept>
 
+
+// TODO: add train-val-test split.
+
+/**
+ * Constructor for DataPreparator.
+ * @param data_root_path Path to dataset CSV files
+ * @param random_seed Seed for shuffling train data
+ * @param batch_size Size of batches returned by get_batch()
+ */
 DataPreparator::DataPreparator(const std::string &data_root_path, int random_seed,
                                int batch_size)
     : base_path(data_root_path), batch_size(batch_size), current_train_index(0),
@@ -19,6 +28,9 @@ DataPreparator::DataPreparator(const std::string &data_root_path, int random_see
     rng = std::mt19937(static_cast<unsigned int>(random_seed));
 }
 
+/**
+ * loads CSV vectors and normalizes to [0,1]
+ */
 Matrix DataPreparator::load_vectors(const std::string &filename, int num_rows,
                                     int num_cols, bool verbose)
 {
@@ -60,6 +72,9 @@ Matrix DataPreparator::load_vectors(const std::string &filename, int num_rows,
     return data;
 }
 
+/**
+ * load CSV labels as integers or one-hot encoding
+ */
 Matrix DataPreparator::load_labels(const std::string &filename, int num_rows,
                                    bool as_one_hot, int num_classes)
 {
@@ -94,6 +109,9 @@ Matrix DataPreparator::load_labels(const std::string &filename, int num_rows,
     return data;
 }
 
+/**
+ * Load train and test data, initialize shuffled indices
+ */
 void DataPreparator::load_data()
 {
     std::cout << "Loading data from path: " + base_path << std::endl;
@@ -120,6 +138,9 @@ void DataPreparator::load_data()
     std::cout << "All data loaded" << std::endl;
 }
 
+/**
+ * Reset epoch: reshuffle train indices and reset pointer
+ */
 void DataPreparator::reset_epoch()
 {
     current_train_index = 0;
@@ -127,6 +148,9 @@ void DataPreparator::reset_epoch()
     std::shuffle(train_indices_.begin(), train_indices_.end(), rng);
 }
 
+/**
+ * returns next batch of data (X, y)
+ */
 std::pair<Matrix, Matrix> DataPreparator::get_batch()
 {
     size_t from = current_train_index;
@@ -155,11 +179,18 @@ std::pair<Matrix, Matrix> DataPreparator::get_batch()
     return {X_batch, y_batch};
 }
 
+
+/**
+ * check if there are more batches in epoch
+ */
 bool DataPreparator::has_next_batch() const
 {
     return current_train_index < static_cast<size_t>(X_train.rows());
 }
 
+/**
+ * standardize train and test data using TRAIN statistics
+ */
 void DataPreparator::standardize_data()
 {
     std::cout << "Standardizing train data" << std::endl;
@@ -188,6 +219,9 @@ void DataPreparator::standardize_data()
               << "All data standardized" << std::endl;
 }
 
+/**
+ * Save predicted class labels to CSV file
+ */
 void DataPreparator::save_predictions(const Matrix &logits, const std::string &filename) {
     // inputs are logits, outputs are class labels got as output from argmax over columns.
     Matrix y_hat = logits.argmax(1);

@@ -2,13 +2,18 @@
 // Created by jakub-ciesko on 11/6/25.
 //
 #include "optimizer.h"
-#include <map>
 #include <cmath>
 
+/**
+ * Basic optimizer for gradient descent (SGD)
+ */
 Optimizer::Optimizer(const std::vector<std::shared_ptr<Tensor>> &params,
                      float learning_rate)
     : params(params), lr(learning_rate){};
 
+/**
+ * Single optimization step, updates parameters based on gradients and learning rate.
+ */
 void Optimizer::step()
 {
     for (auto &param : params)
@@ -18,6 +23,9 @@ void Optimizer::step()
     }
 }
 
+/**
+ * Zeroes out all parameters gradients
+ */
 void Optimizer::zero_grad()
 {
     for (auto &param : params)
@@ -28,6 +36,14 @@ void Optimizer::zero_grad()
 }
 
 
+/**
+ * AdamOptimizer init code. Initilazes momentum and velocity to all zeros.
+ * @param params list of model parameters
+ * @param learning_rate learning rate
+ * @param beta1 decay rate for the first moment (momentum)
+ * @param beta2 decay rate for the second moment (velocity)
+ * @param epsilon small value to prevent divison by zero
+ */
 AdamOptimizer::AdamOptimizer(const std::vector<std::shared_ptr<Tensor> > &params, float learning_rate, float beta1, float beta2, float epsilon):
     Optimizer(params, learning_rate), beta1(beta1), beta2(beta2), epsilon(epsilon), timestep(0){
     initialize_momentum();
@@ -64,6 +80,15 @@ void AdamOptimizer::step()
     }
 }
 
+/**
+ * AdamWOptimizer init code. Initilazes momentum and velocity to all zeros.
+ * @param params list of model parameters
+ * @param learning_rate learning rate
+ * @param beta1 decay rate for the first moment (momentum)
+ * @param beta2 decay rate for the second moment (velocity)
+ * @param weight_decay multiplier for the weight decay term
+ * @param epsilon small value to prevent divison by zero
+ */
 AdamWOptimizer::AdamWOptimizer(const std::vector<std::shared_ptr<Tensor> > &params, float learning_rate, float beta1, float beta2, float weight_decay, float epsilon):
     AdamOptimizer(params, learning_rate, beta1, beta2, epsilon), weight_decay(weight_decay){};
 

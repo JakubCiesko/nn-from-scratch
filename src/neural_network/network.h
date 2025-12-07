@@ -15,12 +15,15 @@ class Network {
     Network(const std::vector<int> &layer_sizes, bool use_dropout, float dropout_p=0.5, int seed=42);
     [[nodiscard]] std::vector<std::shared_ptr<Tensor>> &get_params()  {return params_;};
     // returns logits, training flag is used for dropout if use_dropout set to true
-    Tensor forward(const Tensor& X, bool training) const ;
+    Tensor forward(const Tensor& X, const bool training) const ;
+    Tensor forward_prealloc(Tensor& X, const bool training) const ;
+    void zero_grad_cache();
 
 private:
     bool use_dropout_;
     float dropout_p_;
     std::vector<std::shared_ptr<Tensor>> params_;
+    mutable std::vector<Tensor> state_cache_;
     // this deque will keep all tensors alive until backward()
     mutable std::deque<Tensor> tape;
 };

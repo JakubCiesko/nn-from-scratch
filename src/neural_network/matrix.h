@@ -7,6 +7,7 @@
 #include <vector>
 #include <string>
 #include <random>
+#include <algorithm>
 /**
 * Simple Matrix class used for linear algebra inside neural network implementation. Elements are of type float.
 */
@@ -25,7 +26,9 @@ class Matrix
     Matrix(int rows, int cols, InitMethod method = InitMethod::ZERO, std::mt19937* gen = nullptr);
     /** helper method to visualize matrix content */
     void print() const;
+    /** number of rows **/
     [[nodiscard]] int rows() const;
+    /** number of cols **/
     [[nodiscard]] int cols() const;
     // basic arithmetic
     Matrix operator+(const Matrix &other) const;
@@ -65,6 +68,8 @@ class Matrix
     /** Simple "fused" method which performs matmul and broadcast addition in one pass to speed up essential Wx + b calculation in NN */
     [[nodiscard]] Matrix matmul_broadcast_add(const Matrix &B, const Matrix &C) const;
     void matmul_broadcast_add_prealloc(const Matrix &B, const Matrix &C, Matrix &result) const;
+    void fill(const float value);
+
 
   private:
     /** Initializes matrix elements. */

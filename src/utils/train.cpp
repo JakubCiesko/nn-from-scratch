@@ -45,30 +45,22 @@ void prepare_data(DataPreparator &data_preparator, bool standardize_data) {
         data_preparator.standardize_data();
 }
 
-/*
- *
- * Architecture is hardcoded,
+/**
+ * the main training function. it goes through data in batches and trains the network using the provided optimizer
  */
 void train(TrainingParams &training_params, Network &network, Optimizer &optimizer, DataPreparator &data_preparator) {
 
     Matrix loss_val(1, 1);
-    auto network_params = network.get_params();
-    // now just for loop instead of the below provided thing ?
-    auto W1 = network.get_params()[0];
-    auto b1 = network.get_params()[1];
-    auto W2 = network.get_params()[2];
-    auto b2 = network.get_params()[3];
-    auto W3 = network.get_params()[4];
-    auto b3 = network.get_params()[5];
-
     std::cout << "[" << current_time() << "] "
               << "Starting training for " + std::to_string(training_params.epochs) + " epochs"
               << std::endl;
 
+    // training loop over epochs over batches
     for (int e = 0; e < training_params.epochs; ++e)
     {
 
         int batch_i = 0;
+        // restarts the datapreparator to start over from the beginning of data
         data_preparator.reset_epoch();
 
         while (data_preparator.has_next_batch())
@@ -79,17 +71,21 @@ void train(TrainingParams &training_params, Network &network, Optimizer &optimiz
                                  "] Batch number: " + std::to_string(batch_i) +
                                  " Loss: " + std::to_string(loss_val.get(0, 0))
                           << std::endl;
+            // zeroing out all the stored gradient
             optimizer.zero_grad();
             auto [X_batch_mat, y_batch_mat] = data_preparator.get_batch();
+            // getting nontrainable tensors from data
             Tensor X_batch(X_batch_mat, false);
             Tensor y_batch(y_batch_mat, false);
+            // logits are output of forward method
             Tensor logits = network.forward(X_batch, true);
             Tensor loss = logits.cross_entropy_loss(y_batch);
             loss_val = loss.value;
+            // backpropagation
             loss.backward();
+            // param update
             optimizer.step();
         }
-
 
         if (e % 1 == 0 || e == training_params.epochs - 1)
         {
@@ -100,100 +96,65 @@ void train(TrainingParams &training_params, Network &network, Optimizer &optimiz
     }
 };
 
-
-/*
- * this training function uses prealloc methods in Tensor and Matrix classes.
- * It does not work well however, and the training stalls.
+/**
+ * the main training function. it goes through data in batches and trains the network using the provided optimizer.
+ * It uses preallocated resources.
  */
-void train_prealloc(TrainingParams training_params, Network &network, Optimizer &optimizer, DataPreparator &data_preparator) {
-
-    Matrix loss_val(1, 1);
-    auto network_params = network.get_params();
-
-    auto W1 = network.get_params()[0];
-    auto b1 = network.get_params()[1];
-    auto W2 = network.get_params()[2];
-    auto b2 = network.get_params()[3];
-    auto W3 = network.get_params()[4];
-    auto b3 = network.get_params()[5];
-
-    Tensor y1_linear(Matrix(training_params.batch_size, W1->value.cols()), true);
-    Tensor y1(Matrix(training_params.batch_size, W1->value.cols()), true);
-    Tensor y2_linear(Matrix(training_params.batch_size,W2->value.cols()), true);
-    Tensor y2(Matrix(training_params.batch_size,W2->value.cols()), true);
-    Tensor logits(Matrix(training_params.batch_size, W3 -> value.cols()), true);
+void train_prealloc(TrainingParams &training_params, Network &network, Optimizer &optimizer, DataPreparator &data_preparator) {
+    Matrix loss_val_mat(1, 1);
+    Tensor loss_tensor(loss_val_mat, true);
 
     std::cout << "[" << current_time() << "] "
-              << "Starting training for " + std::to_string(training_params.epochs) + " epochs"
+              << "Starting PREALLOC training for " + std::to_string(training_params.epochs) + " epochs"
               << std::endl;
 
     for (int e = 0; e < training_params.epochs; ++e)
     {
-
         int batch_i = 0;
         data_preparator.reset_epoch();
 
         while (data_preparator.has_next_batch())
         {
-            if (++batch_i % 100 == 0)
-                std::cout << "[" << current_time() << "] "
-                          << "[Epoch " + std::to_string(e + 1) +
-                                 "] Batch number: " + std::to_string(batch_i) +
-                                 " Loss: " + std::to_string(loss_val.get(0, 0))
-                          << std::endl;
-            optimizer.zero_grad();
             auto [X_batch_mat, y_batch_mat] = data_preparator.get_batch();
-            if (X_batch_mat.rows() != training_params.batch_size)
+
+            // in this case i skip the last batch of potentially malformed shape
+            if (X_batch_mat.rows() != training_params.batch_size) {
                 continue;
+            }
+
 
             Tensor X_batch(X_batch_mat, false);
             Tensor y_batch(y_batch_mat, false);
 
-            //reset
-            y1_linear.grad.apply_inplace([](float x) {return 0.0f;});
-            y1_linear.parents.clear();
-            y1_linear.backward_fn = nullptr;
-            y1.grad.apply_inplace([](float x) {return 0.0f;});
-            y1.parents.clear();
-            y1.backward_fn = nullptr;
-            y2_linear.grad.apply_inplace([](float x) {return 0.0f;});
-            y2_linear.parents.clear();
-            y2_linear.backward_fn = nullptr;
-            y2.grad.apply_inplace([](float x) {return 0.0f;});
-            y2.parents.clear();
-            y2.backward_fn = nullptr;
-            logits.grad.apply_inplace([](float x) {return 0.0f;});
-            logits.parents.clear();
-            logits.backward_fn = nullptr;
+            // zero out gradients which could be allocated across batches and make training explode
+            optimizer.zero_grad();
+            network.zero_grad_cache();
 
+            // these two operations do not use preallocated memory
+            // forward pass, returns final tensor value
+            Tensor logits = network.forward_prealloc(X_batch, true);
 
-            X_batch.matmul_broadcast_add_prealloc(*W1, *b1, y1_linear);
-            y1_linear.relu_prealloc(y1);
+            // loss calculation
+            Tensor step_loss = logits.cross_entropy_loss(y_batch);
 
-            y1.matmul_broadcast_add_prealloc(*W2, *b2, y2_linear);
-            y2_linear.relu_prealloc(y2);
+            if (++batch_i % 100 == 0) {
+                 std::cout << "[" << current_time() << "] [Epoch " << (e + 1)
+                           << "] Batch: " << batch_i
+                           << " Loss: " << step_loss.value.get(0, 0) << std::endl;
+            }
 
-            y2.matmul_broadcast_add_prealloc(*W3, *b3, logits);
-
-            Tensor loss = logits.cross_entropy_loss(y_batch);
-
-
-            loss_val = loss.value;
-            loss.backward();
+            // backpropagation of error singal
+            step_loss.backward();
+            // weight/params update
             optimizer.step();
-
-        }
-
-        if (e % 1 == 0 || e == training_params.epochs - 1)
-        {
-            std::cout << "[" << current_time() << "] " << "[Epoch" << std::setw(2)
-                      << e + 1 << "] Loss: ";
-            loss_val.print();
         }
     }
 };
 
 
+/**
+ * generates predictions, runs the whole test set in whole (not in batches).
+ */
 void predict(Network &network, DataPreparator &data_preparator,
                           bool is_test, const std::string &filename) {
 

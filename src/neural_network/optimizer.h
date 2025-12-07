@@ -41,7 +41,7 @@ public:
   AdamWOptimizer(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate, float beta1, float beta2, float weight_decay, float epsilon=1e-8);
   void step() override;
 private:
-  float weight_decay;
+  float weight_decay; // multiplier of parameters
 };
 
 #endif // OPTIMIZER_H

@@ -12,7 +12,9 @@ Matrix::Matrix(int rows, int cols, InitMethod method, std::mt19937* gen)
 {
     initialize(method, gen);
 }
-
+/**
+ * Initializes matrix values to predefined values based on provided (enum) method
+ */
 void Matrix::initialize(InitMethod method, std::mt19937* gen)
 {
     switch (method)
@@ -52,7 +54,7 @@ void Matrix::initialize(InitMethod method, std::mt19937* gen)
     }
 }
 
-/*
+/**
 * checks whether dims of two matrices are the same. used for elementwise operators such as +, -, elementwise *, ...
 */
 void Matrix::check_dims_match_(const Matrix &other) const {
@@ -60,29 +62,29 @@ void Matrix::check_dims_match_(const Matrix &other) const {
         throw std::invalid_argument("Matrix dimensions must match. Got " + shape_str_() + " and " + other.shape_str_());
     }
 }
-/*
+/**
 * checks matrix dimension for matrix multiplication
 */
 void Matrix::check_dims_matmul_(const Matrix &other) const {
     if (cols_ != other.rows_)
         throw std::invalid_argument("Invalid matrix dimensions for matmul. Got " + shape_str_() + " and " + other.shape_str_());
 }
-/*
-* checkes whether provided indices are inside matrix limits
+/**
+* checks whether provided indices are inside matrix limits
 */
 void Matrix::check_element_indices_(int row, int col) const {
     if (row < 0 || row >= rows_ || col < 0 || col >= cols_)
         throw std::out_of_range("Index out of range.");
 }
 
-/*
+/**
 * helper method for displaying messages about shape mismatches
 */
 std::string Matrix::shape_str_() const {
     return "(" + std::to_string(rows_) +"," + std::to_string(cols_) + ")";
 }
 
-/*
+/**
 * checks whether row, col inside matrix bounds and sets value at this place
 */
 void Matrix::set(int row, int col, float value)
@@ -91,7 +93,7 @@ void Matrix::set(int row, int col, float value)
     data_[row * cols_ + col] = value;
 }
 
-/*
+/**
 * checks whether row, col inside matrix bounds and gets value from this place
 */
 float Matrix::get(int row, int col) const
@@ -110,7 +112,7 @@ int Matrix::rows() const
     return rows_;
 }
 
-/*
+/**
 * () operator for getter / setter
 */
 float &Matrix::operator()(int row, int col)
@@ -124,7 +126,9 @@ float Matrix::operator()(int row, int col) const
     return data_[row * cols_ + col];
 }
 
-//helper function for debugging pruposes, do not use for big matrices.
+/**
+ *helper function for viewing matrices. Use for debugging purposes, do not use for big matrices.
+ */
 void Matrix::print() const
 {
 
@@ -140,6 +144,10 @@ void Matrix::print() const
 
 
 // basic matrix algebra
+
+/**
+ * Matrix + Matrix
+ */
 Matrix Matrix::operator+(const Matrix &other) const
 {
     check_dims_match_(other);
@@ -151,6 +159,9 @@ Matrix Matrix::operator+(const Matrix &other) const
     return result;
 }
 
+/**
+ * Matrix + float
+ */
 Matrix Matrix::operator+(float scalar) const
 {
     Matrix result(rows_, cols_);
@@ -182,22 +193,28 @@ Matrix Matrix::operator-(float scalar) const
     return result;
 }
 
-// This will be enhanced
+/**
+ * Matrix multiplication operator. Uses parallelized computing with omp parallel
+ * Could be enhanced for speed with tiling or other more effective algorithms.
+ */
 Matrix Matrix::operator*(const Matrix &other) const
 {
     check_dims_matmul_(other);
     Matrix result(rows_, other.cols_);
 // Cij = dot(Ai*, B*,j) = sum(AiK*bKj)
+// or more effectively switching the order or ijk to ikj to have AiK preloaded
+// https://stackoverflow.com/questions/20467117/for-matrix-operation-why-is-ikj-faster-than-ijk
 #pragma omp parallel for collapse(2) default(none) shared(result, other, rows_, cols_)
 
     for (int i = 0; i < rows_; ++i)
     {
-        for (int j = 0; j < other.cols_; ++j)
+        for (int k = 0; k < cols_; ++k)
         {
-            for (int k = 0; k < cols_; ++k)
+            float a = data_[i * cols_ + k];
+            for (int j = 0; j < other.cols_; ++j)
             {
                 result.data_[i * other.cols_ + j] +=
-                    data_[i * cols_ + k] * other.data_[k * other.cols_ + j];
+                    a * other.data_[k * other.cols_ + j];
             }
         }
     }
@@ -214,6 +231,9 @@ Matrix Matrix::operator*(float scalar) const
     return result;
 }
 
+/**
+ * changes matrix M to M^T inplace (the old structure will be lost), but remember M = (M^T)^T
+ */
 void Matrix::transpose_inplace()
 {
     std::vector<float> transposed(data_.size());
@@ -225,11 +245,14 @@ void Matrix::transpose_inplace()
         }
     }
     data_ = std::move(transposed);
-    int temp = rows_;
+    const int temp = rows_;
     rows_ = cols_;
     cols_ = temp;
 }
 
+/**
+ * returns transposed copy of Matrix M
+ */
 Matrix Matrix::transpose() const
 {
     Matrix result(cols_, rows_);
@@ -243,6 +266,9 @@ Matrix Matrix::transpose() const
     return result;
 }
 
+/**
+ * Applies float-valued function to elements of matrix (can be used for relu for example). Returns copy of matrix.
+ */
 Matrix Matrix::apply(const std::function<float(float)>& function) const
 {
     Matrix result(rows_, cols_);
@@ -253,6 +279,9 @@ Matrix Matrix::apply(const std::function<float(float)>& function) const
     return result;
 }
 
+/**
+ * Applies float-valued function to elements of matrix. Changes the original matrix values.
+ */
 void Matrix::apply_inplace(const std::function<float(float)>& function)
 {
     for (int i = 0; i < rows_ * cols_; ++i)
@@ -261,6 +290,12 @@ void Matrix::apply_inplace(const std::function<float(float)>& function)
     }
 }
 
+/**
+ * Returns copy of flattened 1xCols or 1xRows matrix with sums over rows or columns.
+ * Tries to mimic numpy array method.
+ * @param axis 0 is sum over rows (colsx1), 1 is sum over cols (rowsx1)
+ * @return new matrix with reduced dimension
+ */
 Matrix Matrix::sum_over(int axis) const
 {
     if (axis == 0)
@@ -296,6 +331,9 @@ Matrix Matrix::sum_over(int axis) const
     throw std::invalid_argument("Invalid axis");
 }
 
+/**
+ * Returns new matrix with reduced dimensions. axis 0 is mean over rows (colsx1), 1 is mean over cols (rowsx1)
+ */
 Matrix Matrix::mean_over(int axis) const
 {
     if (axis == 0)
@@ -309,6 +347,9 @@ Matrix Matrix::mean_over(int axis) const
     throw std::invalid_argument("Invalid axis");
 }
 
+/**
+ * Returns new matrix with reduced dimensions. axis 0 is std (standard deviation) over rows (colsx1), 1 is std over cols (rowsx1)
+ */
 Matrix Matrix::std_over(int axis) const
 {
     Matrix mean = mean_over(axis);
@@ -345,6 +386,10 @@ Matrix Matrix::std_over(int axis) const
     throw std::invalid_argument("Invalid axis");
 }
 
+/**
+ * Returns new matrix Cij = Aij*Bij -- elementwise multiplies with other matrix.
+ * Matrices must have the same shape!
+ */
 Matrix Matrix::elementwise_multiply(const Matrix &other) const
 {
     check_dims_match_(other);
@@ -356,6 +401,12 @@ Matrix Matrix::elementwise_multiply(const Matrix &other) const
     return result;
 }
 
+
+/**
+ * Adds the values of `other` to this matrix along the specified axis, using broadcasting rules similar to NumPy:
+ * - If `axis == 0` and `other` is a 1×cols vector, it is added to each row.
+ * - If `axis == 1` and `other` is a rows×1 vector, it is added to each column.
+ */
 Matrix Matrix::broadcast_add(const Matrix &other, int axis) const
 {
     // add row vector (1xcols) across all cols or column vector(1xrows) across all rows
@@ -386,6 +437,9 @@ Matrix Matrix::broadcast_add(const Matrix &other, int axis) const
     throw std::invalid_argument("Invalid axis or dimensions");
 }
 
+/**
+ * Returns new matrix with reduced dimensions. axis 0 is max (standard deviation) over rows (colsx1), 1 is max over cols (rowsx1)
+ */
 Matrix Matrix::max_over(int axis) const
 {
     if (axis == 0)
@@ -419,6 +473,12 @@ Matrix Matrix::max_over(int axis) const
     throw std::invalid_argument("Invalid axis");
 }
 
+/**
+ * Divides elements of matrix by provided Matrix (which is a vector) along the specified axis.
+ * - If `axis == 0` and `other` is a 1×cols vector, each row of this matrix is divided elementwise by `other`.
+ * - If `axis == 1` and `other` is a rows×1 vector, each column of this matrix is divided elementwise by `other`.
+ * Used in softmax calculation.
+*/
 Matrix Matrix::broadcast_divide(const Matrix &other, int axis) const
 {
     if (axis == 0 && other.cols() == cols() && other.rows() == 1)
@@ -449,6 +509,10 @@ Matrix Matrix::broadcast_divide(const Matrix &other, int axis) const
 
     throw std::invalid_argument("Invalid axis or dimensions for broadcast_divide");
 }
+
+/**
+ * Returns new matrix with reduced dimensions. axis 0 is argmax (standard deviation) over rows (colsx1), 1 is argmax over cols (rowsx1)
+ */
 Matrix Matrix::argmax(int axis) const
 {
     if (axis == 0)
@@ -494,6 +558,12 @@ Matrix Matrix::argmax(int axis) const
     throw std::invalid_argument("Invalid axis for argmax: must be 0 or 1");
 }
 
+/**
+ * Computes A*B + C in fused manner to reduce computational load of first D = A*B and then D + C.
+ * @param B Matrix to be multiplied with
+ * @param C Matrix to be added
+ * @return Matrix with value of A*B + C
+ */
 Matrix Matrix::matmul_broadcast_add(const Matrix &B, const Matrix &C) const
 {
     // A=Batch*m B=m*r C = Batch*1 -> result = batch*r
@@ -519,7 +589,11 @@ Matrix Matrix::matmul_broadcast_add(const Matrix &B, const Matrix &C) const
 }
 
 /*
- * this method bypasses matrix creation on each method pass
+ * these methods bypass matrix creation on each method pass, they use preallocated resources
+ */
+
+/**
+ * Matrix multiplication with result saved into preallocated matrix.
  */
 void Matrix::matmul(const Matrix &other, Matrix &result) const {
 
@@ -540,6 +614,14 @@ void Matrix::matmul(const Matrix &other, Matrix &result) const {
         }
 }
 
+/**
+ * Computes A*B + C in fused manner to reduce computational load of first D = A*B and then D + C.
+ * Uses preallocated resources
+ * @param B Matrix to be multiplied with
+ * @param C Matrix to be added
+ * @param result Matrix in which result is saved
+ * @return Matrix with value of A*B + C
+ */
 void Matrix::matmul_broadcast_add_prealloc(const Matrix &B, const Matrix &C, Matrix &result) const {
 
     if (cols_ != B.rows())
@@ -558,4 +640,11 @@ void Matrix::matmul_broadcast_add_prealloc(const Matrix &B, const Matrix &C, Mat
             result.data_[i * B.cols_ + j] = sum + C.data_[j];
         }
     }
+}
+
+/**
+ * Fastest way to fill matrix with one float value. Faster than Matrix.apply_inplace([](float x){return val;})
+ */
+void Matrix::fill(const float value) {
+    std::fill(data_.begin(), data_.end(), value);
 }
