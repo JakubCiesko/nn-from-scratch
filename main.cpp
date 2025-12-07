@@ -12,7 +12,7 @@ int main() {
 
     const auto start_time  = std::chrono::high_resolution_clock::now();
     TrainingParams training_params = {
-        20,//20,
+        50,
         256,
         1e-3f,
         0.9f,

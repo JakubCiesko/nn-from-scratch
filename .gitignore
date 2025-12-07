@@ -7,3 +7,5 @@ benchmarks/
 data/
 train_predictions.csv
 test_predictions.csv
+predictions.csv
+*.zip
