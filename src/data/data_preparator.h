@@ -23,9 +23,10 @@ class DataPreparator
      * @param data_root_path Root path where dataset files are stored.
      * @param random_seed Seed for random number generator (default: 42).
      * @param batch_size Size of mini-batches for training (default: 128).
+     * @param file_prefix prefix of csv files to be loaded {prefix}_train/test_labels/vectors.csv.
     */
     explicit DataPreparator(const std::string &data_root_path, int random_seed = 42,
-                   int batch_size = 128);
+                   int batch_size = 128, const std::string &file_prefix="fashion_mnist");
     /**
     * load_data method loads csv data from defined data_root_path, splits it into train and test sets,
     * and initialized train_indices array which will hold order of train samples for training
@@ -62,26 +63,41 @@ class DataPreparator
         return y_test;
     }
 
+    [[nodiscard]] int get_features_dim() const {
+        return X_train.cols();
+    }
+    // THIS DOES NOT WORK WHEN IT IS NOT ONE HOT ENCODED!
+    [[nodiscard]] int get_num_classes() const {
+        return y_train.cols();
+    }
+
   private:
     /** Loads vectors from a single csv file.
     * @param filename csv file name
     * @param num_rows # of rows to load
     * @param num_cols # of cols in csv file
     * @param verbose verbosity flag
+    * @param normalize_255_to_1 whether to do /255.0f normalization
     * @return Matrix of data
     */
-    static Matrix load_vectors(const std::string &filename, int num_rows, int num_cols,
-                               bool verbose);
+    static Matrix load_vectors(const std::string &filename, int num_rows,
+                                    //int num_cols,
+                                    bool verbose,
+                                    bool normalize_255_to_1);
     /** Loads labels from csv file.
     * @param filename Path to csv file.
     * @param num_rows Number of rows to load.
-    * @param as_one_hot If true, returns one-hot encoded labels.
+    //* @param as_one_hot If true, returns one-hot encoded labels.
     * @param num_classes Number of classes (used for one-hot).
     * @return Matrix of labels.
     */
-    static Matrix load_labels(const std::string &filename, int num_rows,
-                              bool as_one_hot, int num_classes = 10);
+    static Matrix load_labels(const std::string &filename,
+                                   int num_rows,
+                                   //bool as_one_hot,
+                                   //int num_classes=10,
+                                   bool verbose=false);
     std::string base_path;
+    std::string file_prefix;
     std::mt19937 rng;
     Matrix X_train;
     Matrix X_test;

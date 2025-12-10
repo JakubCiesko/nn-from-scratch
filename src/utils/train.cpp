@@ -39,7 +39,7 @@ float compute_accuracy(const Matrix &logits, const Matrix &y_true)
 
 
 // data preparation -- Loads csv files with training and test data, shuffling, standardization
-void prepare_data(DataPreparator &data_preparator, bool standardize_data) {
+void prepare_data(DataPreparator &data_preparator, const bool standardize_data) {
     data_preparator.load_data();
     if (standardize_data)
         data_preparator.standardize_data();

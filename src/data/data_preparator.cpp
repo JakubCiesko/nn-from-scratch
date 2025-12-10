@@ -12,17 +12,12 @@
 
 // TODO: add train-val-test split.
 
-/**
- * Constructor for DataPreparator.
- * @param data_root_path Path to dataset CSV files
- * @param random_seed Seed for shuffling train data
- * @param batch_size Size of batches returned by get_batch()
- */
+
 DataPreparator::DataPreparator(const std::string &data_root_path, int random_seed,
-                               int batch_size)
+                               int batch_size, const std::string &file_prefix)
     : base_path(data_root_path), batch_size(batch_size), current_train_index(0),
       X_train(0, 0), X_test(0, 0), y_train_one_hot(0, 0), y_train(0, 0), y_test(0, 0),
-      y_test_one_hot(0, 0)
+      y_test_one_hot(0, 0), file_prefix(file_prefix)
 {
 
     rng = std::mt19937(static_cast<unsigned int>(random_seed));
@@ -31,81 +26,79 @@ DataPreparator::DataPreparator(const std::string &data_root_path, int random_see
 /**
  * loads CSV vectors and normalizes to [0,1]
  */
-Matrix DataPreparator::load_vectors(const std::string &filename, int num_rows,
-                                    int num_cols, bool verbose)
-{
-    // will use this for loading data into it
-    Matrix data(num_rows, num_cols, Matrix::InitMethod::ZERO);
-    std::ifstream file(filename.c_str());
-    if (!file.is_open())
-    {
-        throw std::runtime_error("Unable to open file");
-    }
 
+std::vector<std::vector<float>> load_csv(const std::string &filename,
+                                         int num_rows = -1,
+                                         bool verbose = false) {
+    std::ifstream file(filename);
+    if (!file.is_open()) throw std::runtime_error("Unable to open file");
+
+    std::vector<std::vector<float>> rows;
     std::string line;
-    std::string value;
-    // line by line parsing of csv values
-    for (int i = 0; i < num_rows; ++i)
-    {
-        if (!std::getline(file, line))
-        {
-            throw std::runtime_error("File error: Not enough rows. Expected " +
-                                     std::to_string(num_rows));
-        }
-        std::stringstream ss(line);
+    int row_index = 0;
+    int num_cols = -1;
 
-        for (int j = 0; j < num_cols; ++j)
-        {
-            if (!std::getline(ss, value, ','))
-            {
-                throw std::runtime_error("File error: Not enough columns in row " +
-                                         std::to_string(i));
-            }
-            data(i, j) = std::stof(value) / 255.0f; // normalization -- make (0,1)
+    while (std::getline(file, line)) {
+        if (line.empty()) continue;
+
+        std::stringstream ss(line);
+        std::string value;
+        std::vector<float> row;
+
+        while (std::getline(ss, value, ',')) {
+            row.push_back(std::stof(value));
         }
-        if (verbose && (i + 1) % 10000 == 0)
-        {
-            std::cout << "  ... read " << (i + 1) << " vector lines." << std::endl;
-        }
+
+        if (num_cols == -1) num_cols = row.size(); // i dynamically get number of cols based on first row
+        else if (row.size() != num_cols)
+            throw std::runtime_error("Inconsistent number of columns in row " +
+                                     std::to_string(row_index));
+
+        rows.push_back(std::move(row));
+        row_index++;
+
+        if (num_rows != -1 && row_index >= num_rows) break;
+
+        if (verbose && (row_index % 10000 == 0))
+            std::cout << "\tRead " << row_index << " rows.\n";
     }
     file.close();
+    if (verbose) std::cout << "Loaded " << rows.size() << " rows with "
+                           << num_cols << " columns.\n";
+
+    return rows;
+}
+
+
+Matrix DataPreparator::load_vectors(const std::string &filename, int num_rows,
+                                    const bool verbose,
+                                    const bool normalize_255_to_1)
+{
+    const std::vector<std::vector<float>> rows = load_csv(filename, num_rows, verbose);
+    if (rows.empty()) throw std::runtime_error("Vector csv is empty at path: " + filename);
+    const int num_cols = rows[0].size();
+    Matrix data(rows.size(), num_cols);
+    for (size_t i = 0; i < rows.size(); ++i)
+        for (int j = 0; j < num_cols; ++j)
+            data(i, j) = normalize_255_to_1? rows[i][j] / 255.0f : rows[i][j];
     return data;
 }
+
 
 /**
  * load CSV labels as integers or one-hot encoding
  */
-Matrix DataPreparator::load_labels(const std::string &filename, int num_rows,
-                                   bool as_one_hot, int num_classes)
+Matrix DataPreparator::load_labels(const std::string &filename,
+                                   int num_rows,
+                                   const bool verbose)
 {
-    int num_cols = as_one_hot ? num_classes : 1;
-    Matrix data(num_rows, num_cols, Matrix::InitMethod::ZERO);
-    std::ifstream file(filename.c_str());
-    if (!file.is_open())
-    {
-        throw std::runtime_error("Unable to open file");
-    }
-    std::string line;
-    for (int i = 0; i < num_rows; ++i)
-    {
-        if (!std::getline(file, line))
-        {
-            throw std::runtime_error("File error: Not enough rows. Expected " +
-                                     std::to_string(num_rows) +
-                                     " Got: " + std::to_string(i));
-        }
-        std::stringstream ss(line);
-        int value = std::stoi(line);
-        if (as_one_hot)
-        {
-            data(i, value) = 1.0f;
-        }
-        else
-        {
-            data(i, 0) = static_cast<float>(value);
-        }
-    }
-    file.close();
+    const std::vector<std::vector<float>> rows = load_csv(filename, num_rows, verbose);
+    if (rows.empty()) throw std::runtime_error("Vector csv is empty at path: " + filename);
+    const int num_cols = rows[0].size();
+    Matrix data(rows.size(), num_cols);
+    for (size_t i = 0; i < rows.size(); ++i)
+        for (int j = 0; j < num_cols; ++j)
+            data(i, j) = rows[i][j];
     return data;
 }
 
@@ -114,17 +107,34 @@ Matrix DataPreparator::load_labels(const std::string &filename, int num_rows,
  */
 void DataPreparator::load_data()
 {
-    std::cout << "Loading data from path: " + base_path << std::endl;
-    std::cout << "Loading train data vectors (60 000 vecs)" << std::endl;
-    X_train = load_vectors(base_path + "fashion_mnist_train_vectors.csv", 60000,
-                           28 * 28, false);
-    std::cout << "Loading train data labels (60 000 labels) - 10 classes" << std::endl;
-    y_train = load_labels(base_path + "fashion_mnist_train_labels.csv", 60000, false, 10);
-    std::cout << "Loading test data vectors (10 000 vecs)" << std::endl;
-    X_test = load_vectors(base_path + "fashion_mnist_test_vectors.csv", 10000, 28 * 28,
-                          false);
-    std::cout << "Loading test data labels (10 000 vecs) - 10 classes" << std::endl;
-    y_test = load_labels(base_path + "fashion_mnist_test_labels.csv", 10000, false, 10);
+    std::cout << "Loading data (prefix: " + file_prefix + ") from path: " + base_path << std::endl;
+
+    const std::string train_vec_path    = file_prefix + "_train_vectors.csv";
+    const std::string train_labels_path = file_prefix + "_train_labels.csv";
+    const std::string test_vec_path     = file_prefix + "_test_vectors.csv";
+    const std::string test_labels_path  = file_prefix + "_test_labels.csv";
+
+
+    std::cout << "Loading train data vectors from " << train_vec_path << std::endl;
+    X_train = load_vectors(base_path + train_vec_path,
+                           -1,          // read all rows in the file
+                          // 4,     // optionally parameterize for other datasets
+                           true,        // verbose
+                           false);
+    std::cout << "Loading train data labels - classes from " << train_labels_path << std::endl;
+    y_train = load_labels(base_path + train_labels_path,
+                           -1,
+                           true);
+    std::cout << "Loading test data vectors from " << test_vec_path << std::endl;;
+    X_test = load_vectors(base_path + test_vec_path,
+                              -1,
+                             // 4,
+                              true,
+                              false);
+    std::cout << "Loading test data labels - classes from " << test_labels_path << std::endl;
+    y_test = load_labels(base_path + test_labels_path,
+                         -1,
+                         true);
 
     // the random order of train samples is achieved through using randomly shuffled train indices
     // shuffling occrus in reset_epoch method
@@ -200,7 +210,14 @@ void DataPreparator::standardize_data()
     {
         for (int j = 0; j < X_train.cols(); ++j)
         {
-            float z_score = (X_train.get(i, j) - mean.get(0, j)) / std.get(0, j);
+            const float std_val = std.get(0, j);
+            float z_score;
+            if (std_val == 0.0f) {
+                 z_score = 0.0f;
+            }
+            else {
+                z_score = (X_train.get(i, j) - mean.get(0, j)) / std_val;
+            }
             X_train.set(i, j, z_score);
         }
     }
@@ -211,7 +228,14 @@ void DataPreparator::standardize_data()
     {
         for (int j = 0; j < X_test.cols(); ++j)
         {
-            float z_score = (X_test.get(i, j) - mean.get(0, j)) / std.get(0, j);
+            const float std_val = std.get(0, j);
+            float z_score;
+            if (std_val == 0.0f) {
+                z_score = 0.0f;
+            }
+            else {
+                z_score = (X_test.get(i, j) - mean.get(0, j)) / std_val;
+            }
             X_test.set(i, j, z_score);
         }
     }
