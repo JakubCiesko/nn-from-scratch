@@ -33,6 +33,7 @@ class Tensor
     void matmul_broadcast_add_prealloc(Tensor &B, Tensor &C, Tensor &result);
     void relu_prealloc(Tensor &result);
     void relu_inplace();
+    Tensor mse(const Tensor &y_true);
     [[nodiscard]] Tensor dropout(float p, bool training);
     std::vector<Tensor*> parents;
 };

@@ -12,7 +12,7 @@ int main() {
 
     const auto start_time  = std::chrono::high_resolution_clock::now();
     TrainingParams training_params = {
-        10, //50
+        500, //50
         256,
         1e-3f,
         0.9f,
@@ -21,18 +21,18 @@ int main() {
         1e-6f
     };
 
-    DataPreparator data_preparator("./data/", 42, training_params.batch_size, "fashion_mnist");
+    DataPreparator data_preparator("./data/", 42, training_params.batch_size, "regression");
     // prepare data (apply standardization)
-    prepare_data(data_preparator, true);
+    prepare_data(data_preparator, false);
 
     //28*28, 512, 256, 128, 10
     //28*28, 256, 128, 64, 10
     //28*28, 256, 128, 32, 10
 
     int input_dim = data_preparator.get_features_dim();
-    int num_classes = 10;
+    int num_classes = 1;
 
-    Network network({input_dim, 256, 128, 16, num_classes}, true, 0.4f, 42);
+    Network network({input_dim, 256, 128, 16, num_classes}, false, 0.4f, 42);
     AdamWOptimizer optimizer(network.get_params(), training_params.adam_lr,
                              training_params.adam_beta1, training_params.adam_beta2,
                              training_params.weight_decay, training_params.epsilon);

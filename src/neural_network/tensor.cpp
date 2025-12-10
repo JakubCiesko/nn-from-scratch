@@ -336,6 +336,39 @@ Tensor Tensor::cross_entropy_loss(const Tensor &y_true)
     return result;
 }
 
+
+Tensor Tensor::mse(const Tensor &y_true)
+{
+    const Matrix &y_hat_val = this->value;
+    const Matrix &y_true_val = y_true.value;
+
+    const Matrix diff = y_hat_val - y_true_val;
+    const Matrix sq_diff = diff.apply([](const float x){return x*x;});
+
+    const float total_loss = sq_diff.mean_over(1)(0,0);
+    Matrix result_value(1, 1, Matrix::InitMethod::ZERO);
+    result_value.set(0, 0, total_loss);
+    Tensor result(result_value, true);
+
+
+    result.parents.push_back(this);
+    auto &y_hat_tensor = *this;
+
+    result.backward_fn = [&y_hat_tensor, diff](const Tensor &self) mutable
+    {
+
+        if (y_hat_tensor.requires_grad)
+        {
+            const int total_elems = diff.rows() * diff.cols();
+            const float scale = 2.0f / static_cast<float>(total_elems);
+            const Matrix mse_val = diff * scale;
+            y_hat_tensor.grad = y_hat_tensor.grad + mse_val;
+        }
+    };
+
+    return result;
+}
+
 /**
  * Matmul of this tensor with B and adds C (broadcasted). Fuses multiple operations into one using fused matrix method.
  * Faster than matmul + add.
