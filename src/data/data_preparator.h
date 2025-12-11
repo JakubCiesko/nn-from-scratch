@@ -11,6 +11,7 @@
 
 #include <vector>
 
+struct TaskDefinition;
 /**
 * DataPreparator class loads, processes data.
 * The class handles loading, standardizing, batching, train-test splitting, and saving of predictions.
@@ -37,7 +38,7 @@ class DataPreparator
      * @param logits Predicted logits (logits! not class labels).
      * @param filename Output file path.
     */
-    void save_predictions(const Matrix &logits, const std::string &filename);
+    void save_predictions(const Matrix &logits, const std::string &filename, const TaskDefinition &task);
     /** Resets current epoch and shuffles train indices. */
     void reset_epoch();
     /** Standardizes train and test data using train-data computed statistics. */

@@ -24,14 +24,24 @@ struct TrainingParams {
     float adam_beta2;
     float weight_decay;
     float epsilon;
+    bool standardize_data;
+    bool use_dropout;
+    float dropout_p;
+};
+
+enum TaskType {Classification, Regression};
+struct TaskDefinition {
+    TaskType task_type;
+    std::string task_name;
+    int final_layer_dim;
 };
 
 void train(TrainingParams &training_params, Network &network,
-           Optimizer &optimizer, DataPreparator &data_preparator);
+           Optimizer &optimizer, DataPreparator &data_preparator, const TaskDefinition &task);
 
 // training using preallocated tensors -- this does not work correctly currently
 void train_prealloc(TrainingParams &training_params, Network &network,
                     Optimizer &optimizer, DataPreparator &data_preparator);
 
 void predict(Network &network, DataPreparator &data_preparator,
-             bool is_test, const std::string &filename);
+             bool is_test, const std::string &filename, const TaskDefinition &task);

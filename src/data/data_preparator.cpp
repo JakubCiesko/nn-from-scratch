@@ -9,6 +9,8 @@
 #include <sstream>
 #include <stdexcept>
 
+#include "../utils/train.h"
+
 
 // TODO: add train-val-test split.
 
@@ -246,19 +248,24 @@ void DataPreparator::standardize_data()
 /**
  * Save predicted class labels to CSV file
  */
-void DataPreparator::save_predictions(const Matrix &logits, const std::string &filename) {
-    // inputs are logits, outputs are class labels got as output from argmax over columns.
-    Matrix y_hat = logits.argmax(1);
+void DataPreparator::save_predictions(const Matrix &y_hat, const std::string &filename, const TaskDefinition &task) {
+    const Matrix y_hat_write = task.task_type == Regression? y_hat : y_hat.argmax(1);
     std::cout << "Saving predictions to " << filename << std::endl;
     std::ofstream file(filename);
     if (!file.is_open())
     {
         throw std::runtime_error("Could not open file: " + filename);
     }
-    for (int i = 0; i < y_hat.rows(); ++i)
+    for (int i = 0; i < y_hat_write.rows(); ++i)
     {
-        int predicted_label = static_cast<int>(y_hat(i, 0));
-        file << predicted_label << "\n";
+        if (task.task_type == Regression) {
+            float predicted_label = y_hat_write(i, 0);
+            file << predicted_label << "\n";
+        }
+        else {
+            int predicted_label = static_cast<int>(y_hat_write(i, 0));
+            file << predicted_label << "\n";
+        }
     }
     file.close();
 }

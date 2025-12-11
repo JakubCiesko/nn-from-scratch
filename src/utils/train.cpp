@@ -48,7 +48,7 @@ void prepare_data(DataPreparator &data_preparator, const bool standardize_data) 
 /**
  * the main training function. it goes through data in batches and trains the network using the provided optimizer
  */
-void train(TrainingParams &training_params, Network &network, Optimizer &optimizer, DataPreparator &data_preparator) {
+void train(TrainingParams &training_params, Network &network, Optimizer &optimizer, DataPreparator &data_preparator, const TaskDefinition &task) {
 
     Matrix loss_val(1, 1);
     std::cout << "[" << current_time() << "] "
@@ -74,15 +74,13 @@ void train(TrainingParams &training_params, Network &network, Optimizer &optimiz
             // zeroing out all the stored gradient
             optimizer.zero_grad();
             auto [X_batch_mat, y_batch_mat] = data_preparator.get_batch();
-
             // getting nontrainable tensors from data
             Tensor X_batch(X_batch_mat, false);
             Tensor y_batch(y_batch_mat, false);
             // logits are output of forward method
             Tensor y_hat = network.forward(X_batch, true);
-            Tensor loss = y_hat.mse(y_batch);
+            Tensor loss = (task.task_type == Regression)? y_hat.mse(y_batch)  : y_hat.cross_entropy_loss(y_batch);
             loss_val = loss.value;
-
             // backpropagation
             loss.backward();
             // param update
@@ -165,7 +163,7 @@ float MSE(const Matrix &y_hat, const Matrix &y_true) {
 }
 
 void predict(Network &network, DataPreparator &data_preparator,
-                          bool is_test, const std::string &filename) {
+                          bool is_test, const std::string &filename, const TaskDefinition &task) {
 
     const std::string data_name =  is_test? "Test Data" : "Train Data";
     std::cout << "[" << current_time() << "] Generating" << data_name << " predictions to: " << filename << std::endl;
@@ -173,16 +171,10 @@ void predict(Network &network, DataPreparator &data_preparator,
     const Matrix y_data = is_test ? data_preparator.get_y_test() : data_preparator.get_y_train();
     const Tensor X(X_data);
     const Tensor y_hat = network.forward(X, false);
-    const float acc = MSE(y_hat.value, y_data);
+    const float metric = task.task_type == Regression? MSE(y_hat.value, y_data): compute_accuracy(y_hat.value, y_data);
+    const std::string metric_name = task.task_type == Regression? "MSE" : "ACC";
     // this takes away from time limit, but it is nice feature
-    std::cout << data_name << " Accuracy: " << acc << std::endl;
-    data_preparator.save_predictions(y_hat.value, filename);
-    Matrix my_guess(5, 1);
-    my_guess(0,0) = 2.0;
-    my_guess(1,0) = 3.0;
-    my_guess(2,0) = 4.0;
-    my_guess(3,0) = 5.0;
-    my_guess(4,0) = 6.0;
-    Tensor yy = network.forward(Tensor(my_guess, false), false);
-    yy.value.print();
+    std::cout << data_name << " "+ metric_name +": " << metric << std::endl;
+    // inputs are logits, outputs are class labels got as output from argmax over columns.
+    data_preparator.save_predictions(y_hat.value, filename, task);
 }
