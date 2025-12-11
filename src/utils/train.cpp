@@ -176,5 +176,5 @@ void predict(Network &network, DataPreparator &data_preparator,
     // this takes away from time limit, but it is nice feature
     std::cout << data_name << " "+ metric_name +": " << metric << std::endl;
     // inputs are logits, outputs are class labels got as output from argmax over columns.
-    data_preparator.save_predictions(y_hat.value, filename, task);
+    data_preparator.save_predictions(y_hat.value, filename);
 }

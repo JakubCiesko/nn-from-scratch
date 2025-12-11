@@ -26,8 +26,7 @@ class DataPreparator
      * @param batch_size Size of mini-batches for training (default: 128).
      * @param file_prefix prefix of csv files to be loaded {prefix}_train/test_labels/vectors.csv.
     */
-    explicit DataPreparator(const std::string &data_root_path, int random_seed = 42,
-                   int batch_size = 128, const std::string &file_prefix="fashion_mnist");
+    explicit DataPreparator(const std::string &data_root_path, const TaskDefinition &task, int batch_size = 128, int random_seed = 42);
     /**
     * load_data method loads csv data from defined data_root_path, splits it into train and test sets,
     * and initialized train_indices array which will hold order of train samples for training
@@ -38,7 +37,7 @@ class DataPreparator
      * @param logits Predicted logits (logits! not class labels).
      * @param filename Output file path.
     */
-    void save_predictions(const Matrix &logits, const std::string &filename, const TaskDefinition &task);
+    void save_predictions(const Matrix &logits, const std::string &filename);
     /** Resets current epoch and shuffles train indices. */
     void reset_epoch();
     /** Standardizes train and test data using train-data computed statistics. */
@@ -81,10 +80,8 @@ class DataPreparator
     * @param normalize_255_to_1 whether to do /255.0f normalization
     * @return Matrix of data
     */
-    static Matrix load_vectors(const std::string &filename, int num_rows,
-                                    //int num_cols,
-                                    bool verbose,
-                                    bool normalize_255_to_1);
+    Matrix load_vectors(const std::string &filename, int num_rows,
+                                    bool verbose) const;
     /** Loads labels from csv file.
     * @param filename Path to csv file.
     * @param num_rows Number of rows to load.
@@ -92,11 +89,9 @@ class DataPreparator
     * @param num_classes Number of classes (used for one-hot).
     * @return Matrix of labels.
     */
-    static Matrix load_labels(const std::string &filename,
+    Matrix load_labels(const std::string &filename,
                                    int num_rows,
-                                   //bool as_one_hot,
-                                   //int num_classes=10,
-                                   bool verbose=false);
+                                   bool verbose=false) ;
     std::string base_path;
     std::string file_prefix;
     std::mt19937 rng;
@@ -109,6 +104,7 @@ class DataPreparator
     std::vector<int> train_indices_;
     size_t current_train_index;
     int batch_size;
+    const TaskDefinition &task;
 };
 
 #endif // DATA_PREPARATOR_H

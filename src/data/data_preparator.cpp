@@ -14,15 +14,15 @@
 
 // TODO: add train-val-test split.
 
-
-DataPreparator::DataPreparator(const std::string &data_root_path, int random_seed,
-                               int batch_size, const std::string &file_prefix)
-    : base_path(data_root_path), batch_size(batch_size), current_train_index(0),
-      X_train(0, 0), X_test(0, 0), y_train_one_hot(0, 0), y_train(0, 0), y_test(0, 0),
-      y_test_one_hot(0, 0), file_prefix(file_prefix)
+DataPreparator::DataPreparator(const std::string &data_root_path, const TaskDefinition &task,
+                               const int batch_size, const int random_seed)
+    : base_path(data_root_path), X_train(0, 0), X_test(0, 0),
+      y_train_one_hot(0, 0), y_train(0, 0), y_test_one_hot(0, 0), y_test(0, 0), current_train_index(0),
+      batch_size(batch_size), task(task)
 {
 
     rng = std::mt19937(static_cast<unsigned int>(random_seed));
+    file_prefix = task.task_name;
 }
 
 /**
@@ -72,9 +72,8 @@ std::vector<std::vector<float>> load_csv(const std::string &filename,
 }
 
 
-Matrix DataPreparator::load_vectors(const std::string &filename, int num_rows,
-                                    const bool verbose,
-                                    const bool normalize_255_to_1)
+Matrix DataPreparator::load_vectors(const std::string &filename, const int num_rows,
+                                    const bool verbose) const
 {
     const std::vector<std::vector<float>> rows = load_csv(filename, num_rows, verbose);
     if (rows.empty()) throw std::runtime_error("Vector csv is empty at path: " + filename);
@@ -82,7 +81,7 @@ Matrix DataPreparator::load_vectors(const std::string &filename, int num_rows,
     Matrix data(rows.size(), num_cols);
     for (size_t i = 0; i < rows.size(); ++i)
         for (int j = 0; j < num_cols; ++j)
-            data(i, j) = normalize_255_to_1? rows[i][j] / 255.0f : rows[i][j];
+            data(i, j) = task.normalize_255_to_1? rows[i][j] / 255.0f : rows[i][j];
     return data;
 }
 
@@ -91,7 +90,7 @@ Matrix DataPreparator::load_vectors(const std::string &filename, int num_rows,
  * load CSV labels as integers or one-hot encoding
  */
 Matrix DataPreparator::load_labels(const std::string &filename,
-                                   int num_rows,
+                                   const int num_rows,
                                    const bool verbose)
 {
     const std::vector<std::vector<float>> rows = load_csv(filename, num_rows, verbose);
@@ -118,25 +117,13 @@ void DataPreparator::load_data()
 
 
     std::cout << "Loading train data vectors from " << train_vec_path << std::endl;
-    X_train = load_vectors(base_path + train_vec_path,
-                           -1,          // read all rows in the file
-                          // 4,     // optionally parameterize for other datasets
-                           true,        // verbose
-                           false);
+    X_train = load_vectors(base_path + train_vec_path, -1, true);
     std::cout << "Loading train data labels - classes from " << train_labels_path << std::endl;
-    y_train = load_labels(base_path + train_labels_path,
-                           -1,
-                           true);
+    y_train = load_labels(base_path + train_labels_path,-1,true);
     std::cout << "Loading test data vectors from " << test_vec_path << std::endl;;
-    X_test = load_vectors(base_path + test_vec_path,
-                              -1,
-                             // 4,
-                              true,
-                              false);
+    X_test = load_vectors(base_path + test_vec_path,-1,true);
     std::cout << "Loading test data labels - classes from " << test_labels_path << std::endl;
-    y_test = load_labels(base_path + test_labels_path,
-                         -1,
-                         true);
+    y_test = load_labels(base_path + test_labels_path,-1, true);
 
     // the random order of train samples is achieved through using randomly shuffled train indices
     // shuffling occrus in reset_epoch method
@@ -248,7 +235,7 @@ void DataPreparator::standardize_data()
 /**
  * Save predicted class labels to CSV file
  */
-void DataPreparator::save_predictions(const Matrix &y_hat, const std::string &filename, const TaskDefinition &task) {
+void DataPreparator::save_predictions(const Matrix &y_hat, const std::string &filename) {
     const Matrix y_hat_write = task.task_type == Regression? y_hat : y_hat.argmax(1);
     std::cout << "Saving predictions to " << filename << std::endl;
     std::ofstream file(filename);
@@ -259,11 +246,11 @@ void DataPreparator::save_predictions(const Matrix &y_hat, const std::string &fi
     for (int i = 0; i < y_hat_write.rows(); ++i)
     {
         if (task.task_type == Regression) {
-            float predicted_label = y_hat_write(i, 0);
-            file << predicted_label << "\n";
+            const float predicted_value = y_hat_write(i, 0);
+            file << predicted_value << "\n";
         }
         else {
-            int predicted_label = static_cast<int>(y_hat_write(i, 0));
+            const int predicted_label = static_cast<int>(y_hat_write(i, 0));
             file << predicted_label << "\n";
         }
     }

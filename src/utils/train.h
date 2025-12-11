@@ -34,6 +34,7 @@ struct TaskDefinition {
     TaskType task_type;
     std::string task_name;
     int final_layer_dim;
+    bool normalize_255_to_1;
 };
 
 void train(TrainingParams &training_params, Network &network,
