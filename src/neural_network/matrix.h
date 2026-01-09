@@ -57,6 +57,12 @@ class Matrix
     [[nodiscard]] Matrix mean_over(int axis) const;
     [[nodiscard]] Matrix std_over(int axis) const;
     [[nodiscard]] Matrix max_over(int axis) const;
+    [[nodiscard]] float sum() const;
+    [[nodiscard]] float mean() const;
+    // todo: add corection argument, default = 1
+    [[nodiscard]] float std() const;
+    [[nodiscard]] float max() const;
+
     /** Haddamard product of two matrices */
     [[nodiscard]] Matrix elementwise_multiply(const Matrix &other) const;
     // broadcast operations are mainly used for adding bias vectors (Wx + b) in NN layers

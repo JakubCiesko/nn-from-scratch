@@ -300,16 +300,13 @@ Matrix Matrix::sum_over(int axis) const
 {
     if (axis == 0)
     {
-        // sum over rows, matrix is 1 * columns
         Matrix result(1, cols_, InitMethod::ZERO);
-        for (int j = 0; j < cols_; ++j)
+        for (int i = 0; i < rows_; ++i)
         {
-            float sum = 0.0f;
-            for (int i = 0; i < rows_; ++i)
+            for (int j = 0; j < cols_; ++j)
             {
-                sum += data_[i * cols_ + j];
+                result.data_[j] += data_[i * cols_ + j];
             }
-            result.data_[j] = sum;
         }
         return result;
     }
@@ -357,15 +354,21 @@ Matrix Matrix::std_over(int axis) const
     {
         // sum over rows, matrix is 1 * columns
         Matrix std(1, cols_, InitMethod::ZERO);
+        for (int i = 0; i < rows_; ++i)
+        {
+            for (int j = 0; j < cols_; ++j)
+            {
+
+                float diff = data_[i * cols_ + j] - mean.get(0, j);
+                std.data_[j] += powf(diff, 2.0f);
+            }
+        }
+        const float inverse_N = 1.0f / static_cast<float>(rows_);
         for (int j = 0; j < cols_; ++j)
         {
-            float sum = 0.0f;
-            for (int i = 0; i < rows_; ++i)
-            {
-                sum += powf((data_[i * cols_ + j] - mean(0, j)), 2.0f);
-            }
-            std.data_[j] = sqrtf(sum / static_cast<float>(rows_));
+            std.data_[j] = sqrtf(std.data_[j] * inverse_N);
         }
+
         return std;
     }
     if (axis == 1)
@@ -375,9 +378,10 @@ Matrix Matrix::std_over(int axis) const
         for (int i = 0; i < rows_; ++i)
         {
             float sum = 0.0f;
+            float mean_val = mean(i, 0);
             for (int j = 0; j < cols_; ++j)
             {
-                sum += powf((data_[i * cols_ + j] - mean(i, 0)), 2.0f); //  j -> i
+                sum += powf((data_[i * cols_ + j] - mean_val), 2.0f); //  j -> i
             }
             result.data_[i] = sqrtf(sum / static_cast<float>(cols_));
         }
@@ -401,6 +405,40 @@ Matrix Matrix::elementwise_multiply(const Matrix &other) const
     return result;
 }
 
+
+float Matrix::max() const {
+    float max = data_[0];
+    for (const float& el : data_) {
+        if (el > max)
+            max = el;
+    }
+    return max;
+}
+
+
+float Matrix::mean() const {
+    float sum = 0.0f;
+    for (const float& el : data_)
+        sum += el;
+    const float N = static_cast<float>(rows_*cols_);
+    return sum / N;
+}
+
+float Matrix::std() const {
+    const float mean_value = mean();
+    float sum = 0.0f;
+    for (const float& el : data_)
+        sum += powf(el - mean_value, 2.0f);
+    const float N = static_cast<float>(rows_*cols_);
+    return sqrtf(sum / N);
+}
+
+float Matrix::sum() const {
+    float sum = 0.0f;
+    for (const float& el : data_)
+        sum += el;
+    return sum;
+}
 
 /**
  * Adds the values of `other` to this matrix along the specified axis, using broadcasting rules similar to NumPy:

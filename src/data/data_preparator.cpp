@@ -192,46 +192,64 @@ bool DataPreparator::has_next_batch() const
  */
 void DataPreparator::standardize_data()
 {
-    std::cout << "Standardizing train data" << std::endl;
-    Matrix std = X_train.std_over(0);
-    Matrix mean = X_train.mean_over(0);
-    for (int i = 0; i < X_train.rows(); ++i)
-    {
-        for (int j = 0; j < X_train.cols(); ++j)
-        {
-            const float std_val = std.get(0, j);
-            float z_score;
-            if (std_val == 0.0f) {
-                 z_score = 0.0f;
-            }
-            else {
-                z_score = (X_train.get(i, j) - mean.get(0, j)) / std_val;
-            }
-            X_train.set(i, j, z_score);
+    std::cout << "Standardizing data" << std::endl;
+    if (task.image_standardize) {
+        float std = X_train.std();
+        float mean = X_train.mean();
+        if (std == 0) {
+            X_train.fill(0.0f);
+            X_test.fill(0.0f);
+        }
+        else {
+            const std::function<float(float)> z_score_fn = [std, mean](float x) {
+                return (x - mean) / std;
+            };
+            X_train.apply_inplace(z_score_fn);
+            X_test.apply_inplace(z_score_fn);
         }
     }
-    std::cout << "Train data standardized" << std::endl;
-    // careful here, test data must be standardized with train-data computed statistics
-    std::cout << "Standardizing test data" << std::endl;
-    for (int i = 0; i < X_test.rows(); ++i)
-    {
-        for (int j = 0; j < X_test.cols(); ++j)
+    else {
+        Matrix std = X_train.std_over(0);
+        Matrix mean = X_train.mean_over(0);
+        for (int i = 0; i < X_train.rows(); ++i)
         {
-            const float std_val = std.get(0, j);
-            float z_score;
-            if (std_val == 0.0f) {
-                z_score = 0.0f;
+            for (int j = 0; j < X_train.cols(); ++j)
+            {
+                const float std_val = std.get(0, j);
+                float z_score;
+                if (std_val == 0.0f) {
+                    z_score = 0.0f;
+                }
+                else {
+                    z_score = (X_train.get(i, j) - mean.get(0, j)) / std_val;
+                }
+                X_train.set(i, j, z_score);
             }
-            else {
-                z_score = (X_test.get(i, j) - mean.get(0, j)) / std_val;
+        }
+        std::cout << "Train data standardized" << std::endl;
+        // careful here, test data must be standardized with train-data computed statistics
+        std::cout << "Standardizing test data" << std::endl;
+        for (int i = 0; i < X_test.rows(); ++i)
+        {
+            for (int j = 0; j < X_test.cols(); ++j)
+            {
+                const float std_val = std.get(0, j);
+                float z_score;
+                if (std_val == 0.0f) {
+                    z_score = 0.0f;
+                }
+                else {
+                    z_score = (X_test.get(i, j) - mean.get(0, j)) / std_val;
+                }
+                X_test.set(i, j, z_score);
             }
-            X_test.set(i, j, z_score);
         }
     }
     std::cout << "Test data standardized" << std::endl
-              << "All data standardized" << std::endl;
-}
 
+              << "All data standardized" << std::endl;
+
+}
 /**
  * Save predicted class labels to CSV file
  */
